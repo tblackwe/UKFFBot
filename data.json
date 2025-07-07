@@ -1,11 +1,12 @@
 {
     "player_map": {
         "867966457068294144": "Yukon",
-        "703206362154352640": "Nemamiah",
-        "703723506180902912": "just_rob"
+        "703206362154352640": "Nemamiah"
     },
     "drafts": {
-        "draftid": "1242488973163499520",
-        "slack_channel_id": "C094HA24885"
+        "1242488973163499520": {
+            "slack_channel_id": "C094HA24885",
+            "last_known_pick_count": 0
+        }
     }
 }

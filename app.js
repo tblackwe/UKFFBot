@@ -4,6 +4,7 @@ const { handleLastPickCommand } = require('./handlers/lastpick.js');
 const { handleRegisterDraftCommand } = require('./handlers/registerDraft.js');
 const { handleRegisterPlayerCommand } = require('./handlers/registerPlayer.js');
 const { handleUsageCommand } = require('./handlers/handleUsageCommand.js');
+const { checkDraftForUpdates } = require('./services/draftMonitor.js');
 
 /**
  * This sample slack application uses SocketMode.
@@ -57,4 +58,9 @@ app.event('app_mention', async ({ event, say, logger }) => {
   await app.start(process.env.PORT || 3000);
 
   app.logger.info('⚡️ Bolt app is running!');
+
+  // Start the draft monitor job to check for new picks periodically.
+  const monitorIntervalMs = 60 * 1000; // 1 minute
+  setInterval(() => checkDraftForUpdates(app), monitorIntervalMs);
+  app.logger.info(`Draft monitor started. Checking for new picks every ${monitorIntervalMs / 1000} seconds.`);
 })();

@@ -14,12 +14,11 @@ const dataFilePath = path.join(__dirname, '..', 'data.json');
  * @param {function} payload.say The function to send a message.
  */
 const handleRegisterDraftCommand = async ({ command, say }) => {
-    // The command object is shaped to be similar to a slash command payload
     const draftId = command.text.trim();
     const channelId = command.channel_id;
 
     if (!draftId) {
-        await say('Please provide a Sleeper Draft ID. Usage: `/registerdraft [draft_id]`');
+        await say('Please provide a Sleeper Draft ID. Usage: `@YourBotName registerdraft [draft_id]`');
         return;
     }
 
@@ -27,10 +26,22 @@ const handleRegisterDraftCommand = async ({ command, say }) => {
         const rawData = await fs.readFile(dataFilePath, 'utf8');
         const data = JSON.parse(rawData);
 
-        // Note: This currently overwrites any existing draft registration.
-        data.drafts = {
-            draftid: draftId,
-            slack_channel_id: channelId
+        // Ensure the drafts object exists
+        if (!data.drafts) {
+            data.drafts = {};
+        }
+
+        // Remove any other draft that might be registered to this channel to avoid duplicates.
+        for (const id in data.drafts) {
+            if (data.drafts[id].slack_channel_id === channelId) {
+                delete data.drafts[id];
+            }
+        }
+
+        // Add the new draft, keyed by its ID.
+        data.drafts[draftId] = {
+            slack_channel_id: channelId,
+            last_known_pick_count: 0
         };
 
         await fs.writeFile(dataFilePath, JSON.stringify(data, null, 4));
