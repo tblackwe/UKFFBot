@@ -1,6 +1,6 @@
 {
   "display_information": {
-    "name": "Getting Started Bolt App"
+    "name": "UKFF Sleeper Bot"
   },
   "features": {
     "app_home": {
@@ -9,18 +9,33 @@
       "messages_tab_read_only_enabled": false
     },
     "bot_user": {
-      "display_name": "BoltApp",
+      "display_name": "UKFF Sleeper Bot",
       "always_online": true
-    }
+    },
+    "slash_commands": [
+      {
+        "command": "/lastpick",
+        "description": "gets the last pick info",
+        "usage_hint": "/lastpick <draftid>",
+        "should_escape": false
+      }
+    ]
   },
   "oauth_config": {
     "scopes": {
-      "bot": ["channels:history", "chat:write", "im:history"]
+      "bot": [
+        "channels:history",
+        "chat:write",
+        "im:history"
+      ]
     }
   },
   "settings": {
     "event_subscriptions": {
-      "bot_events": ["message.channels", "message.im"]
+      "bot_events": [
+        "message.channels",
+        "message.im"
+      ]
     },
     "interactivity": {
       "is_enabled": true
