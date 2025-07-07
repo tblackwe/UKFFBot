@@ -1,5 +1,8 @@
+const fs = require('fs').promises;
+const path = require('path');
 const { getDraftPicks, getDraft } = require('../services/sleeper.js');
-const data = require('../data.json');
+
+const dataFilePath = path.join(__dirname, '..', 'data.json');
 
 /**
  * Finds the user ID for a given draft slot from the draft_order object.
@@ -24,17 +27,24 @@ function getUserForSlot(slot, draftOrder) {
  * @param {function} payload.ack The acknowledgement function.
  * @param {function} payload.say The function to send a message.
  */
-const handleLastPickCommand = async ({ command, ack, say }) => {
-  // Acknowledge command request immediately to avoid timeout errors
-  await ack();
-
-  const draftId = command.text.trim();
-
-  if (!draftId) {
-    await say('Please provide a Sleeper Draft ID. Usage: `/lastpick [draft_id]`');
+const handleLastPickCommand = async ({ command, say }) => {
+  let data;
+  try {
+    const rawData = await fs.readFile(dataFilePath, 'utf8');
+    data = JSON.parse(rawData);
+  } catch (error) {
+    console.error("Error reading data.json in lastpick handler:", error);
+    await say("I couldn't read my configuration file (`data.json`). Please make sure I am set up correctly.");
     return;
   }
 
+  // Use the draft ID from the configuration file.
+  const draftId = data.drafts?.draftid?.toString();
+  
+  if (!draftId) {
+    await say('There is no draft registered. Please use `@YourBotName registerdraft [draft_id]` to register one.');
+    return;
+  }
   try {
     // Fetch draft picks and the full draft details concurrently for efficiency
     const [picks, draft] = await Promise.all([
@@ -88,16 +98,18 @@ const handleLastPickCommand = async ({ command, ack, say }) => {
       }
       // Find the user ID for the determined draft slot
       const nextUserId = getUserForSlot(draftSlotForNextPick, draft.draft_order);
-      // Look up the user's name/handle from your data file, which maps user_id to name.
-      const nextPickerName = data[nextUserId] || `User ID ${nextUserId}`;
+      // Look up the user's name/handle from your data file's player_map.
+      const nextPickerName = data.player_map[nextUserId] || `User ID ${nextUserId}`;
 
       nextPickerMessage = `@${nextPickerName}, you're on the clock!`;
     }
 
-    // The `data.json` file maps a user_id to a name.
+    // The `data.json` file's player_map maps a user_id to a name.
     // The pick object's `picked_by` field contains the user_id of the picker.
-    const lastPickerName = data[lastPick.picked_by] || `User ID ${lastPick.picked_by}`;
-    const pickDetails = `*PICK ALERT!*\n• Round: ${lastPick.round} - Pick Number: ${lastPick.pick_no}\n• Player Drafted: \`${lastPick.metadata.first_name} ${lastPick.metadata.last_name}\`\n• Picked by: ${lastPickerName}\n• ${nextPickerMessage}`;
+    const lastPickerName = data.player_map[lastPick.picked_by] || `User ID ${lastPick.picked_by}`;
+    const playerName = `${lastPick.metadata.first_name} ${lastPick.metadata.last_name}`;
+    const playerPosition = lastPick.metadata.position || 'N/A';
+    const playerTeam = lastPick.metadata.team || 'N/A';
 
     await say({
       blocks: [
@@ -105,11 +117,44 @@ const handleLastPickCommand = async ({ command, ack, say }) => {
           "type": "section",
           "text": {
             "type": "mrkdwn",
-            "text": pickDetails
+            "text": `*PICK ALERT!* :mega:`
+          }
+        },
+        {
+          "type": "section",
+          "fields": [
+            {
+              "type": "mrkdwn",
+              "text": `*Round:*\n${lastPick.round}`
+            },
+            {
+              "type": "mrkdwn",
+              "text": `*Pick:*\n${lastPick.pick_no}`
+            },
+            {
+              "type": "mrkdwn",
+              "text": `*Player Drafted:*\n\`${playerName}\``
+            },
+            {
+              "type": "mrkdwn",
+              "text": `*Position:*\n${playerPosition}`
+            },
+            {
+              "type": "mrkdwn",
+              "text": `*Picked By:*\n${lastPickerName}`
+            }
+          ]
+        },
+        { "type": "divider" },
+        {
+          "type": "section",
+          "text": {
+            "type": "mrkdwn",
+            "text": `*On The Clock:*\n${nextPickerMessage}`
           }
         }
       ],
-      text: `Last pick for draft ${draftId} was ${lastPick.metadata.first_name} ${lastPick.metadata.last_name}. ${nextPickerMessage}`
+      text: `Pick ${lastPick.pick_no}: ${playerName} was selected. ${nextPickerMessage}`
     });
   } catch (error) {
     console.error("Error in /lastpick command:", error);
