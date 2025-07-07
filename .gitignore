@@ -1,3 +1,6 @@
-# node / npm
-node_modules/
-package-lock.json
+# Dependencies
+/node_modules
+
+# Environment variables
+# Keep sensitive information like API tokens out of version control.
+.env
