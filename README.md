@@ -1,69 +1,67 @@
-# Getting Started ⚡️ Bolt for JavaScript
+# UKFFBOT - Sleeper Draft Assistant for Slack
 
-> Slack app example from 📚 [Getting started with Bolt for JavaScript tutorial][1]
+This bot integrates with the Sleeper fantasy football platform to provide real-time draft updates directly within your Slack workspace. It helps keep league members informed about the latest pick and who is on the clock next.
 
-## Overview
+## Features
 
-This is a Slack app built with the [Bolt for JavaScript framework][2] that showcases
-responding to events and interactive buttons.
+- **/lastpick Command:** Fetches and displays the most recent pick for a given Sleeper draft.
+- **On-the-Clock Notifications:** Automatically announces who the next picker is, including an @-mention for their Slack user.
+- **Advanced Draft Logic:** Correctly handles standard snake drafts and drafts with a 3rd Round Reversal (3RR).
 
-## Running locally
+## Project Structure
 
-### 0. Create a new Slack App
+- `app.js`: The main entry point for the Slack bot. Initializes the app and registers command listeners.
+- `/handlers`: Contains the business logic for individual slash commands.
+- `/services`: Modules for interacting with external APIs, like the Sleeper API.
+- `data.json`: A simple mapping of Sleeper user IDs to Slack usernames.
 
-- Go to https://api.slack.com/apps
-- Click **Create App**
-- Choose a workspace
-- Enter App Manifest using contents of `manifest.json`
-- Click **Create**
+---
 
-Once the app is created click **Install to Workspace**
-Then scroll down in Basic Info and click **Generate Token and Scopes** with both scopes
+## Setup and Installation
 
-### 1. Setup environment variables
+Follow these steps to get the bot running for your own Slack workspace and fantasy league.
 
-```zsh
-# Replace with your bot and app token
-export SLACK_BOT_TOKEN=<your-bot-token> # from the OAuth section
-export SLACK_APP_TOKEN=<your-app-level-token> # from the Basic Info App Token Section
+### 1. Clone the Repository
+
+```bash
+git clone <your-repository-url>
+cd ukffbot
 ```
 
-### 2. Setup your local project
+### 2. Install Dependencies
 
-```zsh
-# Clone this project onto your machine
-git clone https://github.com/slackapi/bolt-js-getting-started-app.git
+This project uses Node.js. Make sure you have it installed, then run:
 
-# Change into the project
-cd bolt-js-getting-started-app/
-
-# Install the dependencies
+```bash
 npm install
 ```
 
-### 3. Start servers
+### 3. Configure Environment Variables
 
-```zsh
-npm run start
+Create a file named `.env` in the root of the project. This file will hold your secret tokens. You can get these values from your Slack App's configuration page under "OAuth & Permissions" (Bot Token) and "Basic Information" (App-Level Token).
+
+```
+SLACK_BOT_TOKEN=xoxb-...
+SLACK_APP_TOKEN=xapp-...
 ```
 
-### 4. Test
+### 4. Configure User Mappings
 
-Go to the installed workspace and type **Hello** in a DM to your new bot. You can also type **Hello** in a channel where the bot is present
+Edit the `data.json` file to map the Sleeper User IDs of your league members to their corresponding Slack display names. This is crucial for the `@mention` functionality to work correctly.
 
-## Contributing
+```json
+{
+    "SLEEPER_USER_ID_1": "slack_username_1",
+    "SLEEPER_USER_ID_2": "slack_username_2"
+}
+```
 
-### Issues and questions
+## Running the Bot
 
-Found a bug or have a question about this project? We'd love to hear from you!
+Once everything is configured, you can start the bot with the following command:
 
-1. Browse to [slackapi/bolt-js/issues][4]
-1. Create a new issue
-1. Select the `[x] examples` category
+```bash
+node app.js
+```
 
-See you there and thanks for helping to improve Bolt for everyone!
-
-[1]: https://tools.slack.dev/bolt-js/getting-started
-[2]: https://tools.slack.dev/bolt-js/
-[3]: https://tools.slack.dev/bolt-js/getting-started/#setting-up-events
-[4]: https://github.com/slackapi/bolt-js/issues/new/choose
+The bot will connect to Slack and be ready to respond to commands.
