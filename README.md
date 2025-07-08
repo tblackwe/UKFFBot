@@ -27,7 +27,7 @@ This bot integrates with the Sleeper fantasy football platform to provide real-t
 
 Follow these steps to get the bot running for your own Slack workspace and fantasy league.
 
-### 1. Clone the Repository
+### 1. Clone the Repository - Skip if using Github Codespaces
 
 ```bash
 git clone <your-repository-url>
