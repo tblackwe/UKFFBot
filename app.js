@@ -4,6 +4,8 @@ const { handleLastPickCommand } = require('./handlers/lastpick.js');
 const { handleRegisterDraftCommand } = require('./handlers/registerDraft.js');
 const { handleRegisterPlayerCommand } = require('./handlers/registerPlayer.js');
 const { handleUsageCommand } = require('./handlers/handleUsageCommand.js');
+const { handleUnregisterDraftCommand } = require('./handlers/unregisterDraft.js');
+const { handleListDraftsCommand } = require('./handlers/listDrafts.js');
 const { checkDraftForUpdates } = require('./services/draftMonitor.js');
 
 /**
@@ -43,6 +45,10 @@ app.event('app_mention', async ({ event, say, logger }) => {
       await handleRegisterPlayerCommand({ command: commandPayload, say });
     } else if (commandName === 'usage' || commandName === 'help') {
       await handleUsageCommand({ say });
+    } else if (commandName === 'unregisterdraft') {
+      await handleUnregisterDraftCommand({ command: commandPayload, say });
+    } else if (commandName === 'listdrafts') {
+      await handleListDraftsCommand({ command: commandPayload, say });
     } else {
       await say(`Sorry, I don't understand the command \`${commandName}\`.`);
       await handleUsageCommand({ say });

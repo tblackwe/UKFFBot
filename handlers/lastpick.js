@@ -1,8 +1,6 @@
-const fs = require('fs').promises;
-const path = require('path');
 const { getDraftPicks, getDraft } = require('../services/sleeper.js');
+const { getData } = require('../services/datastore.js');
 
-const dataFilePath = path.join(__dirname, '..', 'data.json');
 
 /**
  * Finds the user ID for a given draft slot from the draft_order object.
@@ -112,8 +110,7 @@ function generatePickMessagePayload(draft, picks, data) {
 const handleLastPickCommand = async ({ command, say }) => {
   let data;
   try {
-    const rawData = await fs.readFile(dataFilePath, 'utf8');
-    data = JSON.parse(rawData);
+    data = await getData();
   } catch (error) {
     console.error("Error reading data.json in lastpick handler:", error);
     await say("I couldn't read my configuration file (`data.json`). Please make sure I am set up correctly.");

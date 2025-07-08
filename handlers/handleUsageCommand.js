@@ -26,11 +26,19 @@ const handleUsageCommand = async ({ say }) => {
                     },
                     {
                         "type": "mrkdwn",
-                        "text": "*`registerdraft [draft_id]`*\nRegisters a Sleeper draft ID for the bot to track against this channel."
+                        "text": "*`registerdraft [draft_id]`*\nRegisters a Sleeper draft ID to this channel."
                     },
                     {
                         "type": "mrkdwn",
                         "text": "*`registerplayer [sleeper_id] [slack_name]`*\nMaps a Sleeper user ID to a Slack username."
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": "*`unregisterdraft`*\nRemoves the draft registration from this channel."
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": "*`listdrafts`*\nLists all registered drafts (DM only)."
                     },
                     {
                         "type": "mrkdwn",
@@ -39,7 +47,7 @@ const handleUsageCommand = async ({ say }) => {
                 ]
             }
         ],
-        text: "Here's a list of my commands: lastpick, registerdraft, registerplayer, usage."
+        text: "Here's a list of my commands: lastpick, registerdraft, unregisterdraft, registerplayer, listdrafts, usage."
     };
 
     await say(usageMessage);

@@ -1,9 +1,7 @@
-const fs = require('fs').promises;
-const path = require('path');
 const { getDraftPicks, getDraft } = require('./sleeper.js');
 const { generatePickMessagePayload } = require('../handlers/lastpick.js');
+const { getData, saveData } = require('./datastore.js');
 
-const dataFilePath = path.join(__dirname, '..', 'data.json');
 
 /**
  * Checks the registered draft for new picks.
@@ -13,8 +11,7 @@ const dataFilePath = path.join(__dirname, '..', 'data.json');
 async function checkDraftForUpdates(app) {
     let data;
     try {
-        const rawData = await fs.readFile(dataFilePath, 'utf8');
-        data = JSON.parse(rawData);
+        data = await getData();
     } catch (error) {
         console.error("Draft Monitor: Could not read data.json.", error);
         return;
@@ -65,7 +62,7 @@ async function checkDraftForUpdates(app) {
 
     // If any draft state was updated, write the entire config file back to disk.
     if (configWasUpdated) {
-        await fs.writeFile(dataFilePath, JSON.stringify(data, null, 4));
+        await saveData(data);
     }
 }
 

@@ -7,6 +7,8 @@ This bot integrates with the Sleeper fantasy football platform to provide real-t
 - **`lastpick` Command:** Fetches and displays the most recent pick for the currently registered Sleeper draft. Usage: `@YourBotName lastpick`.
 - **`registerdraft` Command:** Associates a Sleeper draft ID with a specific Slack channel. Usage: `@YourBotName registerdraft <draft_id>`.
 - **`registerplayer` Command:** Maps a Sleeper User ID to a Slack username for @-mentions. Usage: `@YourBotName registerplayer <sleeper_user_id> <slack_username>`.
+- **`unregisterdraft` Command:** Removes the draft registration from the channel it is used in. Usage: `@YourBotName unregisterdraft`.
+- **`listdrafts` Command:** Lists all currently registered drafts and their associated channels. Must be used in a direct message with the bot. Usage: `@YourBotName listdrafts`.
 - **`usage` or `help` Command:** Displays a list of all available commands and their descriptions. Usage: `@YourBotName usage`.
 - **Automatic Pick Announcements:** A background job runs continuously to check for new picks in all registered drafts and automatically posts an update to the appropriate channel.
 - **On-the-Clock Notifications:** Automatically announces who the next picker is, including an @-mention for their Slack user.
@@ -55,7 +57,7 @@ Edit the `data.json` file. This file has two main sections:
 
 - `player_map`: Map the Sleeper User IDs of your league members to their corresponding Slack display names. This is crucial for the `@mention` functionality to work correctly.
 - `drafts`: This section is managed by the `/registerdraft` command and stores the active draft ID and the channel it's linked to.
-- `drafts`: This section is managed by the bot. It stores the active draft ID, the channel it's linked to, and the last known pick count for monitoring.
+- `drafts`: This section is managed by the bot. It stores an object where each key is a registered Sleeper Draft ID. The value contains the `slack_channel_id` it's linked to and the `last_known_pick_count` for monitoring.
 
 ```json
 {
@@ -64,9 +66,10 @@ Edit the `data.json` file. This file has two main sections:
         "SLEEPER_USER_ID_2": "slack_username_2"
     },
     "drafts": {
-        "draftid": "DRAFT_ID_HERE",
-        "slack_channel_id": "SLACK_CHANNEL_ID_HERE",
-        "last_known_pick_count": 0
+        "123456789012345678": {
+            "slack_channel_id": "C012AB34CD5",
+            "last_known_pick_count": 12
+        }
     }
 }
 ```

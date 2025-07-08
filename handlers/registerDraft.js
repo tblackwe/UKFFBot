@@ -1,8 +1,4 @@
-const fs = require('fs').promises;
-const path = require('path');
-
-// Construct the path to data.json relative to this file's location
-const dataFilePath = path.join(__dirname, '..', 'data.json');
+const { getData, saveData } = require('../services/datastore.js');
 
 /**
  * Handles the logic for the /registerdraft slash command.
@@ -10,7 +6,6 @@ const dataFilePath = path.join(__dirname, '..', 'data.json');
  * and writes it back to the file.
  * @param {object} payload The payload from the Slack command.
  * @param {object} payload.command The command object.
- * @param {function} payload.ack The acknowledgement function.
  * @param {function} payload.say The function to send a message.
  */
 const handleRegisterDraftCommand = async ({ command, say }) => {
@@ -23,8 +18,7 @@ const handleRegisterDraftCommand = async ({ command, say }) => {
     }
 
     try {
-        const rawData = await fs.readFile(dataFilePath, 'utf8');
-        const data = JSON.parse(rawData);
+        const data = await getData();
 
         // Ensure the drafts object exists
         if (!data.drafts) {
@@ -44,7 +38,7 @@ const handleRegisterDraftCommand = async ({ command, say }) => {
             last_known_pick_count: 0
         };
 
-        await fs.writeFile(dataFilePath, JSON.stringify(data, null, 4));
+        await saveData(data);
         await say(`:white_check_mark: Successfully registered draft \`${draftId}\` to this channel.`);
     } catch (error) {
         console.error("Error in /registerdraft command:", error);
