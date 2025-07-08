@@ -1,0 +1,225 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'UKFF Slack Bot - Serverless Infrastructure'
+
+Parameters:
+  SlackBotToken:
+    Type: String
+    NoEcho: true
+    Description: Slack Bot User OAuth Token
+  
+  SlackSigningSecret:
+    Type: String
+    NoEcho: true
+    Description: Slack App Signing Secret
+  
+  Environment:
+    Type: String
+    Default: prod
+    AllowedValues: [dev, staging, prod]
+    Description: Environment name
+
+Globals:
+  Function:
+    Runtime: nodejs18.x
+    Timeout: 30
+    MemorySize: 256
+    Environment:
+      Variables:
+        SLACK_BOT_TOKEN: !Ref SlackBotToken
+        SLACK_SIGNING_SECRET: !Ref SlackSigningSecret
+        DYNAMODB_TABLE_NAME: !Ref UKFFBotTable
+        AWS_NODEJS_CONNECTION_REUSE_ENABLED: 1
+
+Resources:
+  # DynamoDB Table for storing bot data
+  UKFFBotTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub 'UKFFBot-${Environment}'
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: PK
+          AttributeType: S
+        - AttributeName: SK
+          AttributeType: S
+      KeySchema:
+        - AttributeName: PK
+          KeyType: HASH
+        - AttributeName: SK
+          KeyType: RANGE
+      PointInTimeRecoverySpecification:
+        PointInTimeRecoveryEnabled: true
+      SSESpecification:
+        SSEEnabled: true
+      Tags:
+        - Key: Application
+          Value: UKFFBot
+        - Key: Environment
+          Value: !Ref Environment
+
+  # Main Slack Bot Lambda Function
+  SlackBotFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'ukff-slack-bot-${Environment}'
+      CodeUri: ./
+      Handler: lambda-handler.handler
+      Description: 'UKFF Slack Bot for Fantasy Football Draft Management'
+      Environment:
+        Variables:
+          NODE_ENV: production
+      Events:
+        SlackEvents:
+          Type: Api
+          Properties:
+            RestApiId: !Ref SlackBotApi
+            Path: /slack/events
+            Method: post
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UKFFBotTable
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+
+  # Draft Monitor Lambda Function
+  DraftMonitorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'ukff-draft-monitor-${Environment}'
+      CodeUri: ./
+      Handler: lambda-draft-monitor.handler
+      Description: 'UKFF Draft Monitor - Checks for new draft picks periodically'
+      Timeout: 60
+      Environment:
+        Variables:
+          NODE_ENV: production
+      Events:
+        DraftMonitorSchedule:
+          Type: Schedule
+          Properties:
+            Schedule: rate(1 minute)
+            Description: 'Check for new draft picks every minute'
+            Enabled: true
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UKFFBotTable
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+
+  # API Gateway for Slack Events
+  SlackBotApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub 'ukff-slack-bot-api-${Environment}'
+      StageName: !Ref Environment
+      Cors:
+        AllowMethods: "'POST, OPTIONS'"
+        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+        AllowOrigin: "'*'"
+      EndpointConfiguration:
+        Type: REGIONAL
+      TracingEnabled: true
+      MethodSettings:
+        - ResourcePath: '/*'
+          HttpMethod: '*'
+          LoggingLevel: INFO
+          DataTraceEnabled: true
+          MetricsEnabled: true
+
+  # CloudWatch Log Groups
+  SlackBotLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/ukff-slack-bot-${Environment}'
+      RetentionInDays: 14
+
+  DraftMonitorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/ukff-draft-monitor-${Environment}'
+      RetentionInDays: 14
+
+  # CloudWatch Dashboard
+  UKFFBotDashboard:
+    Type: AWS::CloudWatch::Dashboard
+    Properties:
+      DashboardName: !Sub 'UKFFBot-${Environment}'
+      DashboardBody: !Sub |
+        {
+          "widgets": [
+            {
+              "type": "metric",
+              "x": 0,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Invocations", "FunctionName", "${SlackBotFunction}" ],
+                  [ ".", "Errors", ".", "." ],
+                  [ ".", "Duration", ".", "." ]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Slack Bot Lambda Metrics"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 12,
+              "y": 0,
+              "width": 12,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Invocations", "FunctionName", "${DraftMonitorFunction}" ],
+                  [ ".", "Errors", ".", "." ],
+                  [ ".", "Duration", ".", "." ]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Draft Monitor Lambda Metrics"
+              }
+            }
+          ]
+        }
+
+Outputs:
+  SlackBotApiUrl:
+    Description: 'API Gateway endpoint URL for Slack events'
+    Value: !Sub 'https://${SlackBotApi}.execute-api.${AWS::Region}.amazonaws.com/${Environment}/slack/events'
+    Export:
+      Name: !Sub '${AWS::StackName}-SlackBotApiUrl'
+  
+  DynamoDBTableName:
+    Description: 'DynamoDB table name'
+    Value: !Ref UKFFBotTable
+    Export:
+      Name: !Sub '${AWS::StackName}-DynamoDBTableName'
+  
+  SlackBotFunctionArn:
+    Description: 'Slack Bot Lambda Function ARN'
+    Value: !GetAtt SlackBotFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-SlackBotFunctionArn'
+  
+  DraftMonitorFunctionArn:
+    Description: 'Draft Monitor Lambda Function ARN'
+    Value: !GetAtt DraftMonitorFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-DraftMonitorFunctionArn'

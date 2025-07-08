@@ -9,17 +9,22 @@ const { handleListDraftsCommand } = require('./handlers/listDrafts.js');
 const { checkDraftForUpdates } = require('./services/draftMonitor.js');
 
 /**
- * This sample slack application uses SocketMode.
- * For the companion getting started setup guide, see:
- * https://tools.slack.dev/bolt-js/getting-started/
+ * This sample slack application can run in both traditional server mode and AWS Lambda mode.
+ * 
+ * Server mode: Use SocketMode for development
+ * Lambda mode: Use HTTP mode with API Gateway (see lambda-handler.js)
  */
+
+// Determine if we're running in Lambda environment
+const isLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 // Initializes your app with your bot token and signing secret
 const app = new App({
   token: process.env.SLACK_BOT_TOKEN,
   signingSecret: process.env.SLACK_SIGNING_SECRET,
-  // Use HTTP mode instead of Socket Mode for better reliability
-  socketMode: false
+  // Use Socket Mode for development, HTTP mode for Lambda
+  socketMode: !isLambda && isDevelopment
 });
 
 // Handle socket mode connection issues
@@ -64,17 +69,19 @@ app.event('app_mention', async ({ event, say, logger }) => {
       channel_id: event.channel,
     };
 
-    if (commandName === 'last pick') {
+    console.log(`Received command: ${commandName} with args: ${commandArgs}`);
+
+    if (commandName == 'lastpick') {
       await handleLastPickCommand({ command: commandPayload, say });
-    } else if (commandName === 'register draft') {
+    } else if (commandName == 'registerdraft') {
       await handleRegisterDraftCommand({ command: commandPayload, say });
-    } else if (commandName === 'register player') {
+    } else if (commandName == 'registerplayer') {
       await handleRegisterPlayerCommand({ command: commandPayload, say });
-    } else if (commandName === 'usage' || commandName === 'help') {
+    } else if (commandName == 'usage' || commandName == 'help') {
       await handleUsageCommand({ say });
-    } else if (commandName === 'unregister draft') {
+    } else if (commandName == 'unregisterdraft') {
       await handleUnregisterDraftCommand({ command: commandPayload, say });
-    } else if (commandName === 'list drafts') {
+    } else if (commandName == 'listdrafts') {
       await handleListDraftsCommand({ command: commandPayload, say });
     } else {
       await say(`Sorry, I don't understand the command \`${commandName}\`.`);
@@ -116,13 +123,16 @@ app.event(/.+/, async ({ event, logger }) => {
 });
 
 (async () => {
-  // Start your app
-  await app.start(process.env.PORT || 3000);
+  // Only start the server if we're not in Lambda environment
+  if (!isLambda) {
+    await app.start(process.env.PORT || 3000);
+    app.logger.info('⚡️ Bolt app is running!');
 
-  app.logger.info('⚡️ Bolt app is running!');
-
-  // Start the draft monitor job to check for new picks periodically.
-  const monitorIntervalMs = 60 * 1000; // 1 minute
-  setInterval(() => checkDraftForUpdates(app), monitorIntervalMs);
-  app.logger.info(`Draft monitor started. Checking for new picks every ${monitorIntervalMs / 1000} seconds.`);
+    // Start the draft monitor job only in server mode (not Lambda)
+    const monitorIntervalMs = 60 * 1000; // 1 minute
+    setInterval(() => checkDraftForUpdates(app), monitorIntervalMs);
+    app.logger.info(`Draft monitor started. Checking for new picks every ${monitorIntervalMs / 1000} seconds.`);
+  } else {
+    app.logger.info('⚡️ App initialized for Lambda environment');
+  }
 })();
