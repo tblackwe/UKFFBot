@@ -5,13 +5,16 @@
   "main": "app.js",
   "scripts": {
     "start": "node app.js",
-    "test": "jest"
+    "test": "jest",
+    "setup-dynamodb": "node scripts/setup-dynamodb.js"
   },
   "jest": {
     "testEnvironment": "node"
   },
   "license": "MIT",
   "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.840.0",
+    "@aws-sdk/lib-dynamodb": "^3.840.0",
     "@slack/bolt": "^3.17.1",
     "dotenv": "^16.4.5"
   },

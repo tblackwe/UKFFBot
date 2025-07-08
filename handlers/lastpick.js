@@ -25,7 +25,7 @@ function getUserForSlot(slot, draftOrder) {
  * @param {object} data The application's configuration data (from data.json).
  * @returns {object} A Slack message payload object with `blocks` and `text`.
  */
-function generatePickMessagePayload(draft, picks, data) {
+function generatePickMessagePayload(draft, picks, data, notifyNextPicker = false) {
   // Get the last pick from the array of picks
   const lastPick = picks[picks.length - 1];
 
@@ -65,7 +65,7 @@ function generatePickMessagePayload(draft, picks, data) {
     // Look up the user's name/handle from your data file's player_map.
     const nextPickerName = data.player_map[nextUserId] || `User ID ${nextUserId}`;
 
-    nextPickerMessage = `@${nextPickerName}, you're on the clock!`;
+    nextPickerMessage = notifyNextPicker ? `@${nextPickerName}` : nextPickerName;
   }
 
   // The `data.json` file's player_map maps a user_id to a name.
@@ -152,7 +152,7 @@ const handleLastPickCommand = async ({ command, say }) => {
       return;
     }
 
-    const messagePayload = generatePickMessagePayload(draft, picks, data);
+    const messagePayload = generatePickMessagePayload(draft, picks, data, notifyNextPicker = false);
     await say(messagePayload);
   } catch (error) {
     console.error("Error in /lastpick command:", error);

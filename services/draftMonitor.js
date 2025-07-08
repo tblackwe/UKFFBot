@@ -43,7 +43,7 @@ async function checkDraftForUpdates(app) {
                 console.log(`Draft Monitor: New pick detected in draft ${draftId}! Pick count changed from ${lastKnownPickCount} to ${currentPickCount}.`);
 
                 // Generate the message payload using the reusable function
-                const messagePayload = generatePickMessagePayload(draft, picks, data);
+                const messagePayload = generatePickMessagePayload(draft, picks, data, notifyNextPicker = true);
 
                 // Post the message to the registered channel
                 await app.client.chat.postMessage({

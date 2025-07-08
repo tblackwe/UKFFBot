@@ -53,7 +53,7 @@ describe('Draft Monitor Service', () => {
         expect(datastore.getData).toHaveBeenCalledTimes(1);
         expect(sleeper.getDraftPicks).toHaveBeenCalledWith(draftId);
         expect(sleeper.getDraft).toHaveBeenCalledWith(draftId);
-        expect(generatePickMessagePayload).toHaveBeenCalledWith(mockDraft, mockPicks, mockData);
+        expect(generatePickMessagePayload).toHaveBeenCalledWith(mockDraft, mockPicks, mockData, true);
         expect(mockApp.client.chat.postMessage).toHaveBeenCalledWith({
             channel: channelId,
             ...mockMessagePayload,

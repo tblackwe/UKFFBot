@@ -51,9 +51,10 @@ describe('handleLastPickCommand', () => {
         expect(sleeper.getDraft).toHaveBeenCalledWith('draft123');
         expect(sleeper.getDraftPicks).toHaveBeenCalledWith('draft123');
         expect(say).toHaveBeenCalledTimes(1);
-        // Check that the message contains the last pick's info and the next picker
+        // Check that the message contains the blocks structure and text fallback
         expect(say).toHaveBeenCalledWith(expect.objectContaining({
-            text: expect.stringContaining("Player Two was selected. @slack_user2, you're on the clock!")
+            blocks: expect.any(Array),
+            text: expect.stringContaining("Player Two was selected. slack_user2")
         }));
     });
 

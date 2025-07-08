@@ -14,12 +14,39 @@ const { checkDraftForUpdates } = require('./services/draftMonitor.js');
  * https://tools.slack.dev/bolt-js/getting-started/
  */
 
-// Initializes your app with your bot token and app token
+// Initializes your app with your bot token and signing secret
 const app = new App({
   token: process.env.SLACK_BOT_TOKEN,
-  socketMode: true,
-  appToken: process.env.SLACK_APP_TOKEN
+  signingSecret: process.env.SLACK_SIGNING_SECRET,
+  // Use HTTP mode instead of Socket Mode for better reliability
+  socketMode: false
 });
+
+// Handle socket mode connection issues
+app.client.on('error', (error) => {
+  console.error('Slack client error:', error);
+});
+
+// Add connection retry logic
+const startAppWithRetry = async (maxRetries = 5, delay = 5000) => {
+  for (let attempt = 1; attempt <= maxRetries; attempt++) {
+    try {
+      await app.start(process.env.PORT || 3000);
+      app.logger.info('⚡️ Bolt app is running!');
+      return; // Success, exit retry loop
+    } catch (error) {
+      app.logger.error(`Attempt ${attempt} failed:`, error);
+      
+      if (attempt === maxRetries) {
+        app.logger.error('Max retry attempts reached. Exiting...');
+        process.exit(1);
+      }
+      
+      app.logger.info(`Retrying in ${delay/1000} seconds...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+};
 
 /**
  * Listens for messages that @-mention the bot and routes them to the appropriate handler.
@@ -37,17 +64,17 @@ app.event('app_mention', async ({ event, say, logger }) => {
       channel_id: event.channel,
     };
 
-    if (commandName === 'lastpick') {
+    if (commandName === 'last pick') {
       await handleLastPickCommand({ command: commandPayload, say });
-    } else if (commandName === 'registerdraft') {
+    } else if (commandName === 'register draft') {
       await handleRegisterDraftCommand({ command: commandPayload, say });
-    } else if (commandName === 'registerplayer') {
+    } else if (commandName === 'register player') {
       await handleRegisterPlayerCommand({ command: commandPayload, say });
     } else if (commandName === 'usage' || commandName === 'help') {
       await handleUsageCommand({ say });
-    } else if (commandName === 'unregisterdraft') {
+    } else if (commandName === 'unregister draft') {
       await handleUnregisterDraftCommand({ command: commandPayload, say });
-    } else if (commandName === 'listdrafts') {
+    } else if (commandName === 'list drafts') {
       await handleListDraftsCommand({ command: commandPayload, say });
     } else {
       await say(`Sorry, I don't understand the command \`${commandName}\`.`);
@@ -57,6 +84,35 @@ app.event('app_mention', async ({ event, say, logger }) => {
     logger.error("Error processing app_mention:", error);
     await say('An error occurred while processing your request.');
   }
+});
+
+// Handle message events (if bot is added to channels)
+app.message(async ({ message, logger }) => {
+  // Only respond to direct messages or if bot is mentioned
+  if (message.channel_type === 'im') {
+    logger.info('Received direct message, but not handling it');
+  }
+});
+
+// Handle team join events
+app.event('team_join', async ({ event, logger }) => {
+  logger.info('New team member joined');
+});
+
+// Handle channel join events
+app.event('member_joined_channel', async ({ event, logger }) => {
+  logger.info('Member joined channel');
+});
+
+// Add a global error handler for the Slack app
+app.error(async (error) => {
+  console.error('Slack app error:', error);
+});
+
+// Add a catch-all event handler for debugging
+app.event(/.+/, async ({ event, logger }) => {
+  logger.info(`Received unhandled event: ${event.type}`);
+  // Don't process, just log for debugging
 });
 
 (async () => {
