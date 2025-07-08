@@ -21,6 +21,20 @@ const app = new App({
   appToken: process.env.SLACK_APP_TOKEN
 });
 
+app.message('listdrafts', async ({ event, say }) => {
+  const commandPayload = {
+    text: 'listdrafts',
+    channel_id: event.channel,
+  };
+  const channelId = commandPayload.channel_id;
+
+  // DM channel IDs in Slack typically start with 'D'. This ensures the command is private.
+  if (!channelId.startsWith('D')) {
+    return;
+  }
+  await handleListDraftsCommand({ command: commandPayload, say });
+});
+
 /**
  * Listens for messages that @-mention the bot and routes them to the appropriate handler.
  */
