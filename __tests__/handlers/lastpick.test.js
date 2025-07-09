@@ -53,8 +53,14 @@ describe('handleLastPickCommand', () => {
         expect(say).toHaveBeenCalledTimes(1);
         // Check that the message contains the blocks structure and text fallback
         expect(say).toHaveBeenCalledWith(expect.objectContaining({
-            blocks: expect.any(Array),
-            text: expect.stringContaining("Player Two was selected. slack_user2")
+            blocks: expect.arrayContaining([
+                expect.objectContaining({
+                    fields: expect.arrayContaining([
+                        expect.objectContaining({ text: expect.stringContaining('*Pick:* `1.02`') })
+                    ])
+                })
+            ]),
+            text: expect.stringContaining("Pick 1.02: Player Two was selected.")
         }));
     });
 

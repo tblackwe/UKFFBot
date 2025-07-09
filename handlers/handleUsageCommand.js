@@ -33,19 +33,15 @@ const handleUsageCommand = async ({ say }) => {
                     },
                     {
                         "type": "mrkdwn",
-                        "text": "*`register draft [draft_name] [draft_id]`*\nRegisters a Sleeper draft to this channel."
+                        "text": "*`register draft [draft_id]`*\nRegisters a Sleeper draft to this channel."
                     },
                     {
                         "type": "mrkdwn",
-                        "text": "*`register player [name] [draft_name]`*\nRegister yourself for a draft."
+                        "text": "*`register player [sleeper_id] [slack_name]`*\nRegister a player mapping for Sleeper ID to Slack username."
                     },
                     {
                         "type": "mrkdwn",
-                        "text": "*`list players [draft_name]`*\nView all registered players for a draft."
-                    },
-                    {
-                        "type": "mrkdwn",
-                        "text": "*`unregister draft [draft_name]`*\nRemoves the draft registration from this channel."
+                        "text": "*`unregister draft`*\nRemoves the draft registration from this channel."
                     },
                     {
                         "type": "mrkdwn",
@@ -57,7 +53,7 @@ const handleUsageCommand = async ({ say }) => {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "*Examples:*\n`@UKFFBot` _(shows players in current channel)_\n`register draft MyLeague2025 987654321`\n`register player JohnDoe MyLeague2025`\n`list players MyLeague2025`"
+                    "text": "*Examples:*\n`@UKFFBot help`\n`register draft 987654321`\n`register player 123456789 JohnDoe`\n`last pick`"
                 }
             }
         ],

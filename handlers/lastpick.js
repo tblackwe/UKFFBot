@@ -66,7 +66,7 @@ function generatePickMessagePayload(draft, picks, data, notifyNextPicker = false
     // Look up the user's name/handle from your data file's player_map.
     const nextPickerName = data.player_map[nextUserId] || `User ID ${nextUserId}`;
 
-    nextPickerMessage = notifyNextPicker ? `@${nextPickerName}` : nextPickerName;
+    nextPickerMessage = notifyNextPicker ? `<@${nextPickerName}>` : "<@tblackwe>";
   }
 
   // The `data.json` file's player_map maps a user_id to a name.
@@ -74,31 +74,32 @@ function generatePickMessagePayload(draft, picks, data, notifyNextPicker = false
   const lastPickerName = data.player_map[lastPick.picked_by] || `User ID ${lastPick.picked_by}`;
   const playerName = `${lastPick.metadata.first_name} ${lastPick.metadata.last_name}`;
   const playerPosition = lastPick.metadata.position || 'N/A';
-  const playerTeam = lastPick.metadata.team || 'N/A';
+
+  // Calculate pick number within the round, e.g., 1.01, 4.12
+  const pickInRound = ((lastPick.pick_no - 1) % totalTeams) + 1;
+  const formattedPick = `${lastPick.round}.${String(pickInRound).padStart(2, '0')}`;
 
   return {
     blocks: [
       {
         "type": "section",
-        "text": { "type": "mrkdwn", "text": `*PICK ALERT!* :mega:` }
+        "text": { "type": "mrkdwn", "text": `:alarm_clock: *PICK ALERT!* :alarm_clock:` }
       },
       {
         "type": "section",
         "fields": [
-          { "type": "mrkdwn", "text": `*Round:*\n${lastPick.round}` },
-          { "type": "mrkdwn", "text": `*Pick:*\n${lastPick.pick_no}` },
-          { "type": "mrkdwn", "text": `*Player Drafted:*\n\`${playerName}\`` },
-          { "type": "mrkdwn", "text": `*Position:*\n${playerPosition}` },
-          { "type": "mrkdwn", "text": `*Picked By:*\n${lastPickerName}` }
+          { "type": "mrkdwn", "text": `*Pick:* \`${formattedPick}\`` },
+          { "type": "mrkdwn", "text": `*Player:* \`${playerName} - ${playerPosition}\`` },
+          { "type": "mrkdwn", "text": `*Picked By:* ${lastPickerName}` }
         ]
       },
       { "type": "divider" },
       {
         "type": "section",
-        "text": { "type": "mrkdwn", "text": `*On The Clock:*\n${nextPickerMessage}` }
+        "text": { "type": "mrkdwn", "text": `*On The Clock:* ${nextPickerMessage}` }
       }
     ],
-    text: `Pick ${lastPick.pick_no}: ${playerName} was selected. ${nextPickerMessage}`
+    text: `Pick ${formattedPick}: ${playerName} was selected. ${nextPickerMessage}`
   };
 }
 

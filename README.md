@@ -9,7 +9,6 @@ This bot integrates with the Sleeper fantasy football platform to provide real-t
 
 ## ✨ Features
 
-- **Quick Channel Player List:** Simply mention `@UKFFBot` (without any command) to see registered players for the current channel's draft
 - **`last pick` or `latest` Command:** Fetches and displays the most recent pick for the currently registered Sleeper draft
 - **`register draft [draft_id]` Command:** Associates a Sleeper draft ID with a specific Slack channel
 - **`register player [sleeper_id] [slack_name]` Command:** Maps a Sleeper User ID to a Slack username for @-mentions
@@ -158,7 +157,6 @@ npm test
 Once deployed, interact with the bot in Slack:
 
 ```
-@UKFFBot                              # Show registered players for current channel
 @UKFFBot last pick                    # Show latest draft pick
 @UKFFBot register draft 123456789     # Register a Sleeper draft
 @UKFFBot register player 456 john_doe # Map Sleeper ID to Slack user

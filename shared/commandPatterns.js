@@ -4,7 +4,6 @@ const { handleRegisterPlayerCommand } = require('../handlers/registerPlayer.js')
 const { handleUsageCommand } = require('../handlers/handleUsageCommand.js');
 const { handleUnregisterDraftCommand } = require('../handlers/unregisterDraft.js');
 const { handleListDraftsCommand } = require('../handlers/listDrafts.js');
-const { handleListChannelPlayersCommand } = require('../handlers/listChannelPlayers.js');
 
 /**
  * Creates a command payload object for consistency across handlers
@@ -65,9 +64,9 @@ async function handleAppMention({ event, say, logger }) {
     // Remove the bot mention from the message text and trim whitespace
     const text = event.text.replace(/<@.*?>\s*/, '').trim();
 
-    // If no text after mention, show channel players (if any) or help
+    // If no text after mention, show help
     if (!text) {
-      await handleListChannelPlayersCommand({ event, say });
+      await handleUsageCommand({ say });
       return;
     }
 
