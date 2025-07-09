@@ -66,7 +66,7 @@ function generatePickMessagePayload(draft, picks, data, notifyNextPicker = false
     // Look up the user's name/handle from your data file's player_map.
     const nextPickerName = data.player_map[nextUserId] || `User ID ${nextUserId}`;
 
-    nextPickerMessage = notifyNextPicker ? `<@${nextPickerName}>` : "<@tblackwe>";
+    nextPickerMessage = notifyNextPicker ? `<@${nextPickerName}>` : nextPickerName;
   }
 
   // The `data.json` file's player_map maps a user_id to a name.
