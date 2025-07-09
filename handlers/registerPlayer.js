@@ -1,4 +1,5 @@
 const { getData, saveData } = require('../services/datastore.js');
+const { handleCommandError, SUCCESS_MESSAGES } = require('../shared/messages.js');
 
 /**
  * Handles the logic for the `registerplayer` command.
@@ -24,10 +25,9 @@ const handleRegisterPlayerCommand = async ({ command, say }) => {
         data.player_map[sleeperId] = slackName;
 
         await saveData(data);
-        await say(`:white_check_mark: Successfully registered player. Sleeper ID \`${sleeperId}\` is now mapped to \`${slackName}\`.`);
+        await say(SUCCESS_MESSAGES.PLAYER_REGISTERED(sleeperId, slackName));
     } catch (error) {
-        console.error("Error in /registerplayer command:", error);
-        await say(`:x: Sorry, I couldn't register the player. There was an error updating my configuration.`);
+        await handleCommandError('/registerplayer', error, say);
     }
 };
 

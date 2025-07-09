@@ -12,7 +12,9 @@ const app = new App({
  * This function is triggered by EventBridge (CloudWatch Events) on a schedule
  */
 exports.handler = async (event, context) => {
-  console.log('Draft monitor Lambda triggered:', JSON.stringify(event, null, 2));
+  if (process.env.NODE_ENV === 'development') {
+    console.log('Draft monitor Lambda triggered:', JSON.stringify(event, null, 2));
+  }
   
   try {
     // Check for draft updates

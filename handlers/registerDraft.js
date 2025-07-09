@@ -1,4 +1,5 @@
 const { getData, saveData } = require('../services/datastore.js');
+const { handleCommandError, SUCCESS_MESSAGES } = require('../shared/messages.js');
 
 /**
  * Handles the logic for the /registerdraft slash command.
@@ -39,10 +40,9 @@ const handleRegisterDraftCommand = async ({ command, say }) => {
         };
 
         await saveData(data);
-        await say(`:white_check_mark: Successfully registered draft \`${draftId}\` to this channel.`);
+        await say(SUCCESS_MESSAGES.DRAFT_REGISTERED(draftId));
     } catch (error) {
-        console.error("Error in /registerdraft command:", error);
-        await say(`:x: Sorry, I couldn't register the draft. There was an error updating my configuration.`);
+        await handleCommandError('/registerdraft', error, say);
     }
 };
 

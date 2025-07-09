@@ -49,6 +49,25 @@ logs
 # Local DynamoDB
 .dynamodb/
 
+# Build artifacts
+*.zip
+dist/
+build/
+
+# Editor backups
+*~
+*.bak
+*.swp
+*.swo
+
+# Test artifacts
+coverage/
+.nyc_output/
+
+# Temporary files
+*.tmp
+*.temp
+
 # Local environment configuration (contains sensitive data)
 local-env.json
 

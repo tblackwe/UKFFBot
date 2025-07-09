@@ -1,4 +1,5 @@
 const { getData } = require('../services/datastore.js');
+const { handleCommandError } = require('../shared/messages.js');
 
 /**
  * Handles the logic for the `listdrafts` command.
@@ -27,8 +28,7 @@ const handleListDraftsCommand = async ({ say }) => {
 
         await say(messageText);
     } catch (error) {
-        console.error("Error in listdrafts command:", error);
-        await say(`:x: Sorry, I couldn't list the drafts. There was an error reading my configuration.`);
+        await handleCommandError('listdrafts', error, say, ':x: Sorry, I couldn\'t list the drafts. There was an error reading my configuration.');
     }
 };
 
