@@ -1,6 +1,6 @@
 /**
  * This module provides functions for interacting with the Sleeper API for read operations.
- * It uses the global fetch API, which is available in Node.js v18+.
+ * It uses the global fetch API, which is available in Node.js v18+ (maintained for compatibility).
  * If you are using an older version of Node.js, you may need to install a polyfill like 'node-fetch'.
  */
 

@@ -14,7 +14,7 @@ This is a modernized version of the UKFF Slack Bot, designed to run on AWS Lambd
 
 1. **AWS CLI** - Configure with your AWS credentials
 2. **SAM CLI** - For building and deploying serverless applications
-3. **Node.js 18+** - Runtime for the Lambda functions
+3. **Node.js 22+** - Runtime for the Lambda functions
 4. **Slack App** - Created in your Slack workspace
 
 ## Installation
