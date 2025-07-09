@@ -1,25 +1,25 @@
 require('dotenv').config();
 const { App } = require('@slack/bolt');
-const { handleLastPickCommand } = require('./handlers/lastpick.js');
-const { handleRegisterDraftCommand } = require('./handlers/registerDraft.js');
-const { handleRegisterPlayerCommand } = require('./handlers/registerPlayer.js');
-const { handleUsageCommand } = require('./handlers/handleUsageCommand.js');
-const { handleUnregisterDraftCommand } = require('./handlers/unregisterDraft.js');
-const { handleListDraftsCommand } = require('./handlers/listDrafts.js');
+const { handleAppMention, handleDirectMessage } = require('./shared/commandPatterns.js');
 const { checkDraftForUpdates } = require('./services/draftMonitor.js');
 
 /**
- * This sample slack application uses SocketMode.
- * For the companion getting started setup guide, see:
- * https://tools.slack.dev/bolt-js/getting-started/
+ * This sample slack application can run in both traditional server mode and AWS Lambda mode.
+ * 
+ * Server mode: Use SocketMode for development
+ * Lambda mode: Use HTTP mode with API Gateway (see lambda-handler.js)
  */
+
+// Determine if we're running in Lambda environment
+const isLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
+const isDevelopment = process.env.NODE_ENV === 'development';
 
 // Initializes your app with your bot token and signing secret
 const app = new App({
   token: process.env.SLACK_BOT_TOKEN,
   signingSecret: process.env.SLACK_SIGNING_SECRET,
-  // Use HTTP mode instead of Socket Mode for better reliability
-  socketMode: false
+  // Use Socket Mode for development, HTTP mode for Lambda
+  socketMode: !isLambda && isDevelopment
 });
 
 // Handle socket mode connection issues
@@ -27,72 +27,13 @@ app.client.on('error', (error) => {
   console.error('Slack client error:', error);
 });
 
-// Add connection retry logic
-const startAppWithRetry = async (maxRetries = 5, delay = 5000) => {
-  for (let attempt = 1; attempt <= maxRetries; attempt++) {
-    try {
-      await app.start(process.env.PORT || 3000);
-      app.logger.info('⚡️ Bolt app is running!');
-      return; // Success, exit retry loop
-    } catch (error) {
-      app.logger.error(`Attempt ${attempt} failed:`, error);
-      
-      if (attempt === maxRetries) {
-        app.logger.error('Max retry attempts reached. Exiting...');
-        process.exit(1);
-      }
-      
-      app.logger.info(`Retrying in ${delay/1000} seconds...`);
-      await new Promise(resolve => setTimeout(resolve, delay));
-    }
-  }
-};
-
 /**
  * Listens for messages that @-mention the bot and routes them to the appropriate handler.
  */
-app.event('app_mention', async ({ event, say, logger }) => {
-  try {
-    // Remove the bot mention from the message text and trim whitespace
-    const text = event.text.replace(/<@.*?>\s*/, '').trim();
-    const [commandName, ...args] = text.split(/\s+/);
-    const commandArgs = args.join(' ');
-
-    // Construct a "command-like" object to pass to handlers for consistency
-    const commandPayload = {
-      text: commandArgs,
-      channel_id: event.channel,
-    };
-
-    if (commandName === 'last pick') {
-      await handleLastPickCommand({ command: commandPayload, say });
-    } else if (commandName === 'register draft') {
-      await handleRegisterDraftCommand({ command: commandPayload, say });
-    } else if (commandName === 'register player') {
-      await handleRegisterPlayerCommand({ command: commandPayload, say });
-    } else if (commandName === 'usage' || commandName === 'help') {
-      await handleUsageCommand({ say });
-    } else if (commandName === 'unregister draft') {
-      await handleUnregisterDraftCommand({ command: commandPayload, say });
-    } else if (commandName === 'list drafts') {
-      await handleListDraftsCommand({ command: commandPayload, say });
-    } else {
-      await say(`Sorry, I don't understand the command \`${commandName}\`.`);
-      await handleUsageCommand({ say });
-    }
-  } catch (error) {
-    logger.error("Error processing app_mention:", error);
-    await say('An error occurred while processing your request.');
-  }
-});
+app.event('app_mention', handleAppMention);
 
 // Handle message events (if bot is added to channels)
-app.message(async ({ message, logger }) => {
-  // Only respond to direct messages or if bot is mentioned
-  if (message.channel_type === 'im') {
-    logger.info('Received direct message, but not handling it');
-  }
-});
+app.message(handleDirectMessage);
 
 // Handle team join events
 app.event('team_join', async ({ event, logger }) => {
@@ -116,13 +57,21 @@ app.event(/.+/, async ({ event, logger }) => {
 });
 
 (async () => {
-  // Start your app
-  await app.start(process.env.PORT || 3000);
+  // Only start the server if we're not in Lambda environment
+  if (!isLambda) {
+    try {
+      await app.start(process.env.PORT || 3000);
+      app.logger.info('⚡️ Bolt app is running!');
 
-  app.logger.info('⚡️ Bolt app is running!');
-
-  // Start the draft monitor job to check for new picks periodically.
-  const monitorIntervalMs = 60 * 1000; // 1 minute
-  setInterval(() => checkDraftForUpdates(app), monitorIntervalMs);
-  app.logger.info(`Draft monitor started. Checking for new picks every ${monitorIntervalMs / 1000} seconds.`);
+      // Start the draft monitor job only in server mode (not Lambda)
+      const monitorIntervalMs = 60 * 1000; // 1 minute
+      setInterval(() => checkDraftForUpdates(app), monitorIntervalMs);
+      app.logger.info(`Draft monitor started. Checking for new picks every ${monitorIntervalMs / 1000} seconds.`);
+    } catch (error) {
+      app.logger.error('Failed to start app:', error);
+      process.exit(1);
+    }
+  } else {
+    app.logger.info('⚡️ App initialized for Lambda environment');
+  }
 })();

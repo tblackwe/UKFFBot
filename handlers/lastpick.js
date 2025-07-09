@@ -1,5 +1,6 @@
 const { getDraftPicks, getDraft } = require('../services/sleeper.js');
 const { getData } = require('../services/datastore.js');
+const { logError, ERROR_MESSAGES } = require('../shared/messages.js');
 
 
 /**
@@ -132,7 +133,7 @@ const handleLastPickCommand = async ({ command, say }) => {
   }
 
   if (!draftId) {
-    await say('There is no draft registered for this channel. Please use `@YourBotName registerdraft [draft_id]` to get started.');
+    await say(ERROR_MESSAGES.NO_DRAFT_REGISTERED);
     return;
   }
   try {
@@ -155,8 +156,8 @@ const handleLastPickCommand = async ({ command, say }) => {
     const messagePayload = generatePickMessagePayload(draft, picks, data, notifyNextPicker = false);
     await say(messagePayload);
   } catch (error) {
-    console.error("Error in /lastpick command:", error);
-    await say(`Sorry, I couldn't fetch the draft details. The Sleeper API might be down or the Draft ID \`${draftId}\` is invalid.`);
+    logError('/lastpick', error);
+    await say(ERROR_MESSAGES.API_ERROR);
   }
 };
 

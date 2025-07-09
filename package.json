@@ -1,12 +1,15 @@
 {
-  "name": "bolt-js-getting-started-app",
+  "name": "ukff-slack-bot",
   "version": "2.0.0",
-  "description": "Getting Started ⚡️ Bolt for JavaScript",
-  "main": "app.js",
+  "description": "UKFF Slack Bot for Fantasy Football Draft Management",
+  "main": "lambda-handler.js",
   "scripts": {
-    "start": "node app.js",
+    "start:local": "node app.js",
+    "start:sam": "sam local start-api --port 3000 --env-vars local-env.json",
     "test": "jest",
-    "setup-dynamodb": "node scripts/setup-dynamodb.js"
+    "build": "npm ci --production",
+    "package": "zip -r ukff-bot.zip . -x '*.git*' 'node_modules/.cache/*' '__tests__/*' '*.md'",
+    "deploy": "aws lambda update-function-code --function-name ukff-slack-bot --zip-file fileb://ukff-bot.zip"
   },
   "jest": {
     "testEnvironment": "node"
@@ -20,5 +23,8 @@
   },
   "devDependencies": {
     "jest": "^29.7.0"
+  },
+  "engines": {
+    "node": ">=22.0.0"
   }
 }

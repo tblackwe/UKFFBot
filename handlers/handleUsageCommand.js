@@ -22,7 +22,7 @@ const handleUsageCommand = async ({ say }) => {
                 "fields": [
                     {
                         "type": "mrkdwn",
-                        "text": "*`last pick`*\nFetches the most recent pick for the draft registered to this channel."
+                        "text": "*`last pick` or `latest`*\nFetches the most recent pick for the draft registered to this channel."
                     },
                     {
                         "type": "mrkdwn",
@@ -47,7 +47,7 @@ const handleUsageCommand = async ({ say }) => {
                 ]
             }
         ],
-        text: "Here's a list of my commands: last pick, register draft, unregister draft, register player, list drafts, usage."
+        text: "Here's a list of my commands: last pick (or latest), register draft, unregister draft, register player, list drafts, usage."
     };
 
     await say(usageMessage);

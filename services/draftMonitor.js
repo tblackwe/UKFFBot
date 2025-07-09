@@ -40,7 +40,9 @@ async function checkDraftForUpdates(app) {
             const lastKnownPickCount = draftInfo.last_known_pick_count || 0;
 
             if (currentPickCount > lastKnownPickCount) {
-                console.log(`Draft Monitor: New pick detected in draft ${draftId}! Pick count changed from ${lastKnownPickCount} to ${currentPickCount}.`);
+                if (process.env.NODE_ENV === 'development') {
+                    console.log(`Draft Monitor: New pick detected in draft ${draftId}! Pick count changed from ${lastKnownPickCount} to ${currentPickCount}.`);
+                }
 
                 // Generate the message payload using the reusable function
                 const messagePayload = generatePickMessagePayload(draft, picks, data, notifyNextPicker = true);

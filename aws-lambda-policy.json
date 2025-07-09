@@ -1,0 +1,27 @@
+{
+    "Version": "2012-10-17",
+    "Statement": [
+        {
+            "Effect": "Allow",
+            "Action": [
+                "lambda:*",
+                "apigateway:*",
+                "dynamodb:*",
+                "logs:*",
+                "events:*",
+                "iam:GetRole",
+                "iam:CreateRole",
+                "iam:AttachRolePolicy",
+                "iam:PassRole",
+                "cloudformation:*",
+                "s3:GetObject",
+                "s3:PutObject",
+                "s3:CreateBucket",
+                "s3:ListBucket",
+                "cloudwatch:PutDashboard",
+                "cloudwatch:DeleteDashboards"
+            ],
+            "Resource": "*"
+        }
+    ]
+}
