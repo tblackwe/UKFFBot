@@ -13,7 +13,6 @@ This bot integrates with the Sleeper fantasy football platform to provide real-t
 - **`register draft [draft_id]` Command:** Associates a Sleeper draft ID with a specific Slack channel
 - **`register player [sleeper_id] [slack_name]` Command:** Maps a Sleeper User ID to a Slack username for @-mentions
 - **`unregister draft` Command:** Removes the draft registration from the current channel
-- **`list drafts` Command:** Lists all currently registered drafts and their associated channels (DM only)
 - **`usage` or `help` Command:** Displays a list of all available commands and their descriptions
 - **Automatic Pick Announcements:** Scheduled monitoring checks for new picks and posts updates automatically
 - **On-the-Clock Notifications:** Announces who the next picker is with @-mentions for Slack users
@@ -162,7 +161,6 @@ Once deployed, interact with the bot in Slack:
 @UKFFBot register draft 123456789     # Register a Sleeper draft
 @UKFFBot register player 456 john_doe # Map Sleeper ID to Slack user
 @UKFFBot unregister draft             # Remove draft registration
-@UKFFBot list drafts                  # List all drafts (DM only)
 @UKFFBot help                         # Show all commands
 ```
 

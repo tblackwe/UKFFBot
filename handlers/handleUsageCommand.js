@@ -38,16 +38,12 @@ const handleUsageCommand = async ({ say }) => {
                     },
                     {
                         "type": "mrkdwn",
-                        "text": "*`list drafts`*\nLists all registered drafts (DM only)."
-                    },
-                    {
-                        "type": "mrkdwn",
                         "text": "*`usage` or `help`*\nShows this help message."
                     }
                 ]
             }
         ],
-        text: "Here's a list of my commands: last pick (or latest), register draft, unregister draft, register player, list drafts, usage."
+        text: "Here's a list of my commands: last pick (or latest), register draft, unregister draft, register player, usage."
     };
 
     await say(usageMessage);

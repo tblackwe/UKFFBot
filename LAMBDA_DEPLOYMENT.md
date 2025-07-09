@@ -83,7 +83,6 @@ Your bot supports the following commands when mentioned:
 - `@bot register draft <draft_id>` - Register a draft for monitoring
 - `@bot register player <player_name> <sleeper_user_id>` - Register a player
 - `@bot last pick` - Show the last draft pick
-- `@bot list drafts` - List all registered drafts
 - `@bot unregister draft <draft_id>` - Unregister a draft
 - `@bot usage` or `@bot help` - Show usage information
 
