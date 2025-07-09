@@ -5,18 +5,9 @@ const { getData } = require('../services/datastore.js');
  * It lists all registered drafts and the channels they are linked to.
  * This command will only respond when used in a direct message with the bot.
  * @param {object} payload The payload from the Slack command.
- * @param {object} payload.command The command object, containing channel_id.
  * @param {function} payload.say The function to send a message.
  */
-const handleListDraftsCommand = async ({ command, say }) => {
-    const channelId = command.channel_id;
-
-    // DM channel IDs in Slack typically start with 'D'. This ensures the command is private.
-    if (!channelId.startsWith('D')) {
-        await say("For security, the `listdrafts` command can only be used in a direct message with me.");
-        return;
-    }
-
+const handleListDraftsCommand = async ({ say }) => {
     try {
         const data = await getData();
         const drafts = data.drafts || {};

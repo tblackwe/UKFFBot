@@ -1,4 +1,5 @@
 const { App, AwsLambdaReceiver } = require('@slack/bolt');
+const fs = require('fs').promises;
 
 // Import all your existing handlers
 const { handleLastPickCommand } = require('./handlers/lastpick.js');
@@ -17,7 +18,8 @@ const awsLambdaReceiver = new AwsLambdaReceiver({
 const app = new App({
   token: process.env.SLACK_BOT_TOKEN,
   receiver: awsLambdaReceiver,
-  // Remove socketMode and related options as they're not needed for Lambda
+  // The `processBeforeResponse` option is recommended for all FaaS environments
+  processBeforeResponse: true,
 });
 
 /**
@@ -27,29 +29,67 @@ app.event('app_mention', async ({ event, say, logger }) => {
   try {
     // Remove the bot mention from the message text and trim whitespace
     const text = event.text.replace(/<@.*?>\s*/, '').trim();
-    const [commandName, ...args] = text.split(/\s+/);
-    const commandArgs = args.join(' ');
 
-    // Construct a "command-like" object to pass to handlers for consistency
-    const commandPayload = {
-      text: commandArgs,
-      channel_id: event.channel,
-    };
+    // Define command patterns with regex for flexible matching (including multi-word commands)
+    const commandPatterns = [
+      { 
+        pattern: /^latest.+$/i, 
+        handler: (remainingText) => {
+          const commandPayload = { text: remainingText, channel_id: event.channel };
+          return handleLastPickCommand({ command: commandPayload, say });
+        }
+      },
+      { 
+        pattern: /^register\sdraft(.+)$/i, 
+        handler: (remainingText) => {
+          const commandPayload = { text: remainingText, channel_id: event.channel };
+          return handleRegisterDraftCommand({ command: commandPayload, say });
+        }
+      },
+      { 
+        pattern: /^register\splayer(.+)$/i, 
+        handler: (remainingText) => {
+          const commandPayload = { text: remainingText, channel_id: event.channel };
+          return handleRegisterPlayerCommand({ command: commandPayload, say });
+        }
+      },
+      { 
+        pattern: /^(usage|help)$/i, 
+        handler: () => handleUsageCommand({ say })
+      },
+      { 
+        pattern: /^unregister\sdraft(.+)$/i, 
+        handler: (remainingText) => {
+          const commandPayload = { text: remainingText, channel_id: event.channel };
+          return handleUnregisterDraftCommand({ command: commandPayload, say });
+        }
+      },
+      { 
+        pattern: /^list\sdrafts$/i, 
+        handler: () => say("For security, the `list drafts` command can only be used in a direct message with me.")
+      }
+    ];
 
-    if (commandName === 'last pick') {
-      await handleLastPickCommand({ command: commandPayload, say });
-    } else if (commandName === 'register draft') {
-      await handleRegisterDraftCommand({ command: commandPayload, say });
-    } else if (commandName === 'register player') {
-      await handleRegisterPlayerCommand({ command: commandPayload, say });
-    } else if (commandName === 'usage' || commandName === 'help') {
-      await handleUsageCommand({ say });
-    } else if (commandName === 'unregister draft') {
-      await handleUnregisterDraftCommand({ command: commandPayload, say });
-    } else if (commandName === 'list drafts') {
-      await handleListDraftsCommand({ command: commandPayload, say });
+    // Find matching command pattern by testing the full text
+    let matchedCommand = null;
+    let remainingText = '';
+    
+    for (const { pattern, handler } of commandPatterns) {
+      const match = text.match(pattern);
+      if (match) {
+        matchedCommand = { handler };
+        // Extract remaining text after the command
+        remainingText = match[1] ? match[1].trim() : '';
+        break;
+      }
+    }
+    
+    if (matchedCommand) {
+      await matchedCommand.handler(remainingText);
     } else {
-      await say(`Sorry, I don't understand the command \`${commandName}\`.`);
+      // Extract first word/phrase for error message
+      const firstWord = text.split(/\s+/)[0] || text;
+      await say(`Sorry, I don't understand the command \`${firstWord}\`.`);
       await handleUsageCommand({ say });
     }
   } catch (error) {
@@ -62,7 +102,8 @@ app.event('app_mention', async ({ event, say, logger }) => {
 app.message(async ({ message, logger }) => {
   // Only respond to direct messages or if bot is mentioned
   if (message.channel_type === 'im') {
-    logger.info('Received direct message, but not handling it');
+    if (/list drafts/i.test(message.text))
+      await handleListDraftsCommand({ command: commandPayload, say });
   }
 });
 
@@ -90,7 +131,7 @@ app.event(/.+/, async ({ event, logger }) => {
 // AWS Lambda handler
 module.exports.handler = async (event, context, callback) => {
   console.log('Lambda received event:', JSON.stringify(event, null, 2));
-  
+
   try {
     const handler = await awsLambdaReceiver.start();
     return await handler(event, context, callback);
