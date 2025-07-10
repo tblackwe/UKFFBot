@@ -60,7 +60,7 @@ const handleUsageCommand = async ({ say }) => {
         text: "UKFF Slack Bot - Available Commands"
     };
 
-    await say(usageMessage);
+    await say("Ask Yukon for now. He's cleaning this up soon.");
 };
 
 module.exports = { handleUsageCommand };
