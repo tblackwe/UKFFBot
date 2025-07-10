@@ -1,16 +1,16 @@
 {
     "display_information": {
-        "name": "UKFF Sleeper Bot",
+        "name": "UKFF Bot",
         "background_color": "#32384d"
     },
     "features": {
         "app_home": {
-            "home_tab_enabled": false,
+            "home_tab_enabled": true,
             "messages_tab_enabled": true,
             "messages_tab_read_only_enabled": false
         },
         "bot_user": {
-            "display_name": "UKFF Sleeper Bot",
+            "display_name": "UKFF Bot",
             "always_online": true
         }
     },
@@ -19,7 +19,6 @@
             "bot": [
                 "channels:history",
                 "chat:write",
-                "commands",
                 "im:history",
                 "app_mentions:read"
             ]
@@ -27,16 +26,16 @@
     },
     "settings": {
         "event_subscriptions": {
-            "request_url": "https://your-api-gateway-url.amazonaws.com/prod/slack/events",
+            "request_url": "https://ij73zmabnj.execute-api.us-east-1.amazonaws.com/prod/slack/events",
             "bot_events": [
+                "app_home_opened",
                 "app_mention",
-                "message.channels",
                 "message.im"
             ]
         },
         "interactivity": {
             "is_enabled": true,
-            "request_url": "https://your-api-gateway-url.amazonaws.com/prod/slack/events"
+            "request_url": "https://ij73zmabnj.execute-api.us-east-1.amazonaws.com/prod/slack/events"
         },
         "org_deploy_enabled": false,
         "socket_mode_enabled": false,
