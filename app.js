@@ -109,7 +109,7 @@ app.error(async (error) => {
 
 // Add a catch-all event handler for debugging
 app.event(/.+/, async ({ event, logger }) => {
-  logger.info(`Received unhandled event: ${event.type}`);
+  logger.info(`Received unhandled event: ${event.type} ${event.text}`);
   // Don't process, just log for debugging
 });
 

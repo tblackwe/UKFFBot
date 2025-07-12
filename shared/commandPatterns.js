@@ -4,6 +4,7 @@ const { handleRegisterPlayerCommand } = require('../handlers/registerPlayer.js')
 const { handleUsageCommand } = require('../handlers/handleUsageCommand.js');
 const { handleUnregisterDraftCommand } = require('../handlers/unregisterDraft.js');
 const { handleListDraftsCommand } = require('../handlers/listDrafts.js');
+const { handleUpdatePlayersCommand } = require('../handlers/updatePlayers.js');
 
 /**
  * Creates a command payload object for consistency across handlers
@@ -15,7 +16,7 @@ function createCommandPayload(remainingText, channelId) {
 /**
  * Creates the command patterns array for consistent command routing
  */
-function createCommandPatterns(event, say) {
+function createCommandPatterns(event, say, client = null) {
   return [
     { 
       pattern: /^(last\s+pick|latest)$/i, 
@@ -35,7 +36,7 @@ function createCommandPatterns(event, say) {
       pattern: /^register\splayer(.+)$/i, 
       handler: (remainingText) => {
         const commandPayload = createCommandPayload(remainingText, event.channel);
-        return handleRegisterPlayerCommand({ command: commandPayload, say });
+        return handleRegisterPlayerCommand({ command: commandPayload, say, client });
       }
     },
     { 
@@ -50,6 +51,10 @@ function createCommandPatterns(event, say) {
       }
     },
     { 
+      pattern: /^update\s+players$/i, 
+      handler: () => handleUpdatePlayersCommand({ say, client })
+    },
+    { 
       pattern: /^list\sdrafts$/i, 
       handler: () => say("For security, the `list drafts` command can only be used in a direct message with me.")
     }
@@ -59,7 +64,7 @@ function createCommandPatterns(event, say) {
 /**
  * Processes app_mention events with consistent command routing
  */
-async function handleAppMention({ event, say, logger }) {
+async function handleAppMention({ event, say, logger, client }) {
   try {
     // Remove the bot mention from the message text and trim whitespace
     const text = event.text.replace(/<@.*?>\s*/, '').trim();
@@ -70,7 +75,7 @@ async function handleAppMention({ event, say, logger }) {
       return;
     }
 
-    const commandPatterns = createCommandPatterns(event, say);
+    const commandPatterns = createCommandPatterns(event, say, client);
 
     // Find matching command pattern by testing the full text
     let matchedCommand = null;

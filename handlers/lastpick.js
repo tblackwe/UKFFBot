@@ -1,5 +1,5 @@
 const { getDraftPicks, getDraft } = require('../services/sleeper.js');
-const { getData } = require('../services/datastore.js');
+const { getData, getPlayer } = require('../services/datastore.js');
 const { logError, ERROR_MESSAGES } = require('../shared/messages.js');
 
 
@@ -23,10 +23,11 @@ function getUserForSlot(slot, draftOrder) {
  * Generates the Slack message payload for a pick update.
  * @param {object} draft The full draft object from the Sleeper API.
  * @param {object[]} picks The array of pick objects from the Sleeper API.
- * @param {object} data The application's configuration data (from data.json).
+ * @param {object} data The application's configuration data (from datastore).
+ * @param {boolean} notifyNextPicker Whether to use @ mention for next picker notification.
  * @returns {object} A Slack message payload object with `blocks` and `text`.
  */
-function generatePickMessagePayload(draft, picks, data, notifyNextPicker = false) {
+async function generatePickMessagePayload(draft, picks, data, notifyNextPicker = false) {
   // Get the last pick from the array of picks
   const lastPick = picks[picks.length - 1];
 
@@ -63,15 +64,58 @@ function generatePickMessagePayload(draft, picks, data, notifyNextPicker = false
     }
     // Find the user ID for the determined draft slot
     const nextUserId = getUserForSlot(draftSlotForNextPick, draft.draft_order);
-    // Look up the user's name/handle from your data file's player_map.
-    const nextPickerName = data.player_map[nextUserId] || `User ID ${nextUserId}`;
-
-    nextPickerMessage = notifyNextPicker ? `<@${nextPickerName}>` : nextPickerName;
+    
+    // Get player data from the datastore
+    let nextPickerName = `User ID ${nextUserId}`;
+    try {
+      const playerData = await getPlayer(nextUserId);
+      if (playerData) {
+        if (notifyNextPicker && playerData.slackMemberId) {
+          // Use @ mention with member ID for notifications
+          nextPickerName = `<@${playerData.slackMemberId}>`;
+        } else if (playerData.slackName) {
+          // Use display name for regular display
+          nextPickerName = playerData.slackName;
+        } else if (playerData.slackMemberId) {
+          // Fallback to member ID if no display name
+          nextPickerName = playerData.slackMemberId;
+        }
+      } else {
+        // Fallback to old player_map format for backward compatibility
+        const mappedName = data.player_map[nextUserId];
+        if (mappedName) {
+          nextPickerName = notifyNextPicker ? `<@${mappedName}>` : mappedName;
+        }
+      }
+    } catch (error) {
+      console.warn(`Could not get player data for ${nextUserId}:`, error);
+      // Fallback to old player_map format
+      const mappedName = data.player_map[nextUserId];
+      if (mappedName) {
+        nextPickerName = notifyNextPicker ? `<@${mappedName}>` : mappedName;
+      }
+    }
+    nextPickerMessage = nextPickerName;
   }
 
-  // The `data.json` file's player_map maps a user_id to a name.
-  // The pick object's `picked_by` field contains the user_id of the picker.
-  const lastPickerName = data.player_map[lastPick.picked_by] || `User ID ${lastPick.picked_by}`;
+  // Get the last picker's name using the new datastore structure
+  let lastPickerName = `User ID ${lastPick.picked_by}`;
+  try {
+    const playerData = await getPlayer(lastPick.picked_by);
+    if (playerData && playerData.slackName) {
+      lastPickerName = playerData.slackName;
+    } else if (playerData && playerData.slackMemberId) {
+      lastPickerName = playerData.slackMemberId;
+    } else {
+      // Fallback to old player_map format
+      lastPickerName = data.player_map[lastPick.picked_by] || lastPickerName;
+    }
+  } catch (error) {
+    console.warn(`Could not get player data for ${lastPick.picked_by}:`, error);
+    // Fallback to old player_map format
+    lastPickerName = data.player_map[lastPick.picked_by] || lastPickerName;
+  }
+
   const playerName = `${lastPick.metadata.first_name} ${lastPick.metadata.last_name}`;
   const playerPosition = lastPick.metadata.position || 'N/A';
 
@@ -79,7 +123,13 @@ function generatePickMessagePayload(draft, picks, data, notifyNextPicker = false
   const pickInRound = ((lastPick.pick_no - 1) % totalTeams) + 1;
   const formattedPick = `${lastPick.round}.${String(pickInRound).padStart(2, '0')}`;
 
+  // Create the fallback text for the message
+  const fallbackText = picksMade < totalPicks 
+    ? `Pick ${formattedPick}: ${playerName} (${playerPosition}) was selected by ${lastPickerName}. Next up: ${nextPickerMessage}`
+    : `Pick ${formattedPick}: ${playerName} (${playerPosition}) was selected by ${lastPickerName}. The draft is complete!`;
+
   return {
+    text: fallbackText, // This is the required fallback text
     blocks: [
       {
         "type": "section",
@@ -89,7 +139,8 @@ function generatePickMessagePayload(draft, picks, data, notifyNextPicker = false
         "type": "section",
         "fields": [
           { "type": "mrkdwn", "text": `*Pick:* \`${formattedPick}\`` },
-          { "type": "mrkdwn", "text": `*Player:* \`${playerName} - ${playerPosition}\`` }
+          { "type": "mrkdwn", "text": `*Player:* \`${playerName} - ${playerPosition}\`` },
+          { "type": "mrkdwn", "text": `*Picked By:* ${lastPickerName}` }
         ]
       },
       { "type": "divider" },
@@ -97,8 +148,7 @@ function generatePickMessagePayload(draft, picks, data, notifyNextPicker = false
         "type": "section",
         "text": { "type": "mrkdwn", "text": `*On The Clock:* ${nextPickerMessage}` }
       }
-    ],
-    text: `Pick ${formattedPick}: ${playerName} was selected. ${nextPickerMessage}`
+    ]
   };
 }
 
@@ -153,7 +203,7 @@ const handleLastPickCommand = async ({ command, say }) => {
       return;
     }
 
-    const messagePayload = generatePickMessagePayload(draft, picks, data, notifyNextPicker = false);
+    const messagePayload = await generatePickMessagePayload(draft, picks, data, notifyNextPicker = false);
     await say(messagePayload);
   } catch (error) {
     logError('/lastpick', error);

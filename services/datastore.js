@@ -33,7 +33,8 @@ async function getData() {
             if (item.PK === 'PLAYER' && item.SK.startsWith('SLEEPER#')) {
                 // Extract sleeper ID from SK
                 const sleeperId = item.SK.replace('SLEEPER#', '');
-                data.player_map[sleeperId] = item.slackMemberId ?? item.slackName;
+                // Prefer slackMemberId over slackName for backward compatibility
+                data.player_map[sleeperId] = item.slackMemberId || item.slackName;
             } else if (item.PK === 'DRAFT' && item.SK.startsWith('DRAFT#')) {
                 // Extract draft ID from SK
                 const draftId = item.SK.replace('DRAFT#', '');
@@ -61,14 +62,16 @@ async function saveData(data) {
     try {
         // Convert player_map to DynamoDB items
         if (data.player_map) {
-            for (const [sleeperId, slackName] of Object.entries(data.player_map)) {
+            for (const [sleeperId, slackMemberIdOrName] of Object.entries(data.player_map)) {
                 const putCommand = new PutCommand({
                     TableName: TABLE_NAME,
                     Item: {
                         PK: 'PLAYER',
                         SK: `SLEEPER#${sleeperId}`,
                         sleeperId: sleeperId,
-                        slackName: slackName
+                        slackMemberId: slackMemberIdOrName,
+                        // Note: This is for backward compatibility. New registrations should use savePlayer()
+                        slackName: slackMemberIdOrName
                     }
                 });
                 await docClient.send(putCommand);
@@ -100,7 +103,7 @@ async function saveData(data) {
 /**
  * Gets a specific player by sleeper ID.
  * @param {string} sleeperId The sleeper ID to look up.
- * @returns {Promise<string|null>} The slack name or null if not found.
+ * @returns {Promise<object|null>} The player data with slackMemberId and slackName, or null if not found.
  */
 async function getPlayer(sleeperId) {
     try {
@@ -113,7 +116,13 @@ async function getPlayer(sleeperId) {
         });
         
         const response = await docClient.send(command);
-        return response.Item ? response.Item.slackName : null;
+        if (response.Item) {
+            return {
+                slackMemberId: response.Item.slackMemberId,
+                slackName: response.Item.slackName
+            };
+        }
+        return null;
     } catch (error) {
         console.error("Error getting player from DynamoDB:", error);
         throw error;
@@ -123,10 +132,11 @@ async function getPlayer(sleeperId) {
 /**
  * Saves a single player mapping.
  * @param {string} sleeperId The sleeper ID.
- * @param {string} slackName The slack username.
+ * @param {string} slackMemberId The slack member ID.
+ * @param {string} slackName The slack username (optional, can be resolved later).
  * @returns {Promise<void>}
  */
-async function savePlayer(sleeperId, slackName) {
+async function savePlayer(sleeperId, slackMemberId, slackName = null) {
     try {
         const command = new PutCommand({
             TableName: TABLE_NAME,
@@ -134,7 +144,8 @@ async function savePlayer(sleeperId, slackName) {
                 PK: 'PLAYER',
                 SK: `SLEEPER#${sleeperId}`,
                 sleeperId: sleeperId,
-                slackName: slackName
+                slackMemberId: slackMemberId,
+                slackName: slackName || slackMemberId // Use member ID as fallback
             }
         });
         
@@ -258,6 +269,65 @@ async function getDraftsByChannelScan(slackChannelId) {
     }
 }
 
+/**
+ * Updates a player's slack name while keeping the member ID.
+ * @param {string} sleeperId The sleeper ID.
+ * @param {string} slackName The updated slack username.
+ * @returns {Promise<void>}
+ */
+async function updatePlayerSlackName(sleeperId, slackName) {
+    try {
+        // First get the existing player data
+        const existingPlayer = await getPlayer(sleeperId);
+        if (!existingPlayer) {
+            throw new Error(`Player with sleeper ID ${sleeperId} not found`);
+        }
+
+        const command = new PutCommand({
+            TableName: TABLE_NAME,
+            Item: {
+                PK: 'PLAYER',
+                SK: `SLEEPER#${sleeperId}`,
+                sleeperId: sleeperId,
+                slackMemberId: existingPlayer.slackMemberId,
+                slackName: slackName
+            }
+        });
+        
+        await docClient.send(command);
+    } catch (error) {
+        console.error("Error updating player slack name in DynamoDB:", error);
+        throw error;
+    }
+}
+
+/**
+ * Gets all players and resolves their slack names from member IDs.
+ * This function can be used to bulk update slack names using the Slack API.
+ * @returns {Promise<Array>} Array of player objects with sleeperId, slackMemberId, and slackName.
+ */
+async function getAllPlayers() {
+    try {
+        const command = new QueryCommand({
+            TableName: TABLE_NAME,
+            KeyConditionExpression: 'PK = :pk',
+            ExpressionAttributeValues: {
+                ':pk': 'PLAYER'
+            }
+        });
+        
+        const response = await docClient.send(command);
+        return response.Items.map(item => ({
+            sleeperId: item.sleeperId,
+            slackMemberId: item.slackMemberId,
+            slackName: item.slackName
+        }));
+    } catch (error) {
+        console.error("Error getting all players from DynamoDB:", error);
+        throw error;
+    }
+}
+
 module.exports = {
     getData,
     saveData,
@@ -266,4 +336,6 @@ module.exports = {
     getDraft,
     saveDraft,
     getDraftsByChannel,
+    updatePlayerSlackName,
+    getAllPlayers
 };
