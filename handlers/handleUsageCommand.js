@@ -37,7 +37,11 @@ const handleUsageCommand = async ({ say }) => {
                     },
                     {
                         "type": "mrkdwn",
-                        "text": "*`register player [sleeper_username] [slack_name]`*\nRegister a player mapping for Sleeper username to Slack username."
+                        "text": "*`register player [sleeper_username] [@slack_user]`*\nRegister a player mapping for Sleeper username to Slack user."
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": "*`update players`*\nUpdate all player slack names from their member IDs."
                     },
                     {
                         "type": "mrkdwn",

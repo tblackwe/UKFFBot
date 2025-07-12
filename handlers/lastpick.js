@@ -1,6 +1,7 @@
 const { getDraftPicks, getDraft } = require('../services/sleeper.js');
 const { getData, getPlayer } = require('../services/datastore.js');
 const { logError, ERROR_MESSAGES } = require('../shared/messages.js');
+const { getDisplayName } = require('../services/slackUserService.js');
 
 
 /**
@@ -70,16 +71,7 @@ async function generatePickMessagePayload(draft, picks, data, notifyNextPicker =
     try {
       const playerData = await getPlayer(nextUserId);
       if (playerData) {
-        if (notifyNextPicker && playerData.slackMemberId) {
-          // Use @ mention with member ID for notifications
-          nextPickerName = `<@${playerData.slackMemberId}>`;
-        } else if (playerData.slackName) {
-          // Use display name for regular display
-          nextPickerName = playerData.slackName;
-        } else if (playerData.slackMemberId) {
-          // Fallback to member ID if no display name
-          nextPickerName = playerData.slackMemberId;
-        }
+        nextPickerName = getDisplayName(playerData, notifyNextPicker);
       } else {
         // Fallback to old player_map format for backward compatibility
         const mappedName = data.player_map[nextUserId];
@@ -102,10 +94,8 @@ async function generatePickMessagePayload(draft, picks, data, notifyNextPicker =
   let lastPickerName = `User ID ${lastPick.picked_by}`;
   try {
     const playerData = await getPlayer(lastPick.picked_by);
-    if (playerData && playerData.slackName) {
-      lastPickerName = playerData.slackName;
-    } else if (playerData && playerData.slackMemberId) {
-      lastPickerName = playerData.slackMemberId;
+    if (playerData) {
+      lastPickerName = getDisplayName(playerData, false); // Never use mention for last picker
     } else {
       // Fallback to old player_map format
       lastPickerName = data.player_map[lastPick.picked_by] || lastPickerName;
