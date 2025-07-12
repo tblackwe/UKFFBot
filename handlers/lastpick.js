@@ -7,7 +7,7 @@ const { logError, ERROR_MESSAGES } = require('../shared/messages.js');
  * Finds the user ID for a given draft slot from the draft_order object.
  * @param {number} slot The draft slot to find (e.g., 1, 2, 3...).
  * @param {object} draftOrder The draft_order object from the Sleeper draft details, mapping user_id to slot.
- * @returns {string|null} The user ID for the slot, or null if not found.
+ * @toreturns {string|null} The user ID for the slot, or null if not found.
  */
 function getUserForSlot(slot, draftOrder) {
   // Iterate over the draft order to find the user ID whose value matches the slot.
@@ -89,8 +89,7 @@ function generatePickMessagePayload(draft, picks, data, notifyNextPicker = false
         "type": "section",
         "fields": [
           { "type": "mrkdwn", "text": `*Pick:* \`${formattedPick}\`` },
-          { "type": "mrkdwn", "text": `*Player:* \`${playerName} - ${playerPosition}\`` },
-          { "type": "mrkdwn", "text": `*Picked By:* ${lastPickerName}` }
+          { "type": "mrkdwn", "text": `*Player:* \`${playerName} - ${playerPosition}\`` }
         ]
       },
       { "type": "divider" },

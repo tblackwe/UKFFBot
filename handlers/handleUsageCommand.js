@@ -37,7 +37,7 @@ const handleUsageCommand = async ({ say }) => {
                     },
                     {
                         "type": "mrkdwn",
-                        "text": "*`register player [sleeper_id] [slack_name]`*\nRegister a player mapping for Sleeper ID to Slack username."
+                        "text": "*`register player [sleeper_username] [slack_name]`*\nRegister a player mapping for Sleeper username to Slack username."
                     },
                     {
                         "type": "mrkdwn",
@@ -53,14 +53,14 @@ const handleUsageCommand = async ({ say }) => {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "*Examples:*\n`@UKFFBot help`\n`register draft 987654321`\n`register player 123456789 JohnDoe`\n`last pick`"
+                    "text": "*Examples:*\n`@UKFFBot help`\n`register draft 987654321`\n`register player john_doe JohnDoe`\n`last pick`"
                 }
             }
         ],
         text: "UKFF Slack Bot - Available Commands"
     };
 
-    await say("Ask Yukon for now. He's cleaning this up soon.");
+    await say(usageMessage);
 };
 
 module.exports = { handleUsageCommand };

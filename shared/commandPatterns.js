@@ -66,7 +66,7 @@ async function handleAppMention({ event, say, logger }) {
 
     // If no text after mention, show help
     if (!text) {
-      // await handleUsageCommand({ say });
+      await handleUsageCommand({ say });
       return;
     }
 
@@ -92,6 +92,7 @@ async function handleAppMention({ event, say, logger }) {
       // Extract first word/phrase for error message
       const firstWord = text.split(/\s+/)[0] || text;
       await say(`Sorry, I don't understand the command \`${firstWord}\`.`);
+      await handleUsageCommand({ say });
     }
   } catch (error) {
     logger.error("Error processing app_mention:", error);

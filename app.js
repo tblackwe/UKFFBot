@@ -1,7 +1,28 @@
-require('dotenv').config();
+// require('dotenv').config();
+const fs = require('fs');
+const path = require('path');
 const { App } = require('@slack/bolt');
 const { handleAppMention, handleDirectMessage } = require('./shared/commandPatterns.js');
 const { checkDraftForUpdates } = require('./services/draftMonitor.js');
+
+// Load local environment variables from local-env.json if it exists and we're in development
+const localEnvPath = path.join(__dirname, 'local-env.json');
+if (fs.existsSync(localEnvPath)) {
+  try {
+    const localEnv = JSON.parse(fs.readFileSync(localEnvPath, 'utf8'));
+    
+    // Merge local environment variables with process.env (don't override existing ones)
+    Object.keys(localEnv).forEach(key => {
+      if (!process.env[key]) {
+        process.env[key] = localEnv[key];
+      }
+    });
+    
+    console.log('📁 Loaded local environment variables from local-env.json');
+  } catch (error) {
+    console.warn('⚠️  Warning: Could not parse local-env.json:', error.message);
+  }
+}
 
 /**
  * This sample slack application can run in both traditional server mode and AWS Lambda mode.
@@ -12,15 +33,51 @@ const { checkDraftForUpdates } = require('./services/draftMonitor.js');
 
 // Determine if we're running in Lambda environment
 const isLambda = !!process.env.AWS_LAMBDA_FUNCTION_NAME;
-const isDevelopment = process.env.NODE_ENV === 'development';
+const isDevelopment = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
+
+console.log('🚀 Environment:', {
+  isLambda,
+  isDevelopment,
+  nodeEnv: process.env.NODE_ENV,
+  socketMode: !isLambda,
+  hasSlackBotToken: !!process.env.SLACK_BOT_TOKEN,
+  hasSlackSigningSecret: !!process.env.SLACK_SIGNING_SECRET,
+  hasSlackAppToken: !!process.env.SLACK_APP_TOKEN,
+  port: process.env.PORT || 3000
+});
+
+// Validate required environment variables
+const requiredEnvVars = ['SLACK_BOT_TOKEN', 'SLACK_SIGNING_SECRET'];
+// Add SLACK_APP_TOKEN as required when not in Lambda (for socket mode)
+if (!isLambda) {
+  requiredEnvVars.push('SLACK_APP_TOKEN');
+}
+
+const missingEnvVars = requiredEnvVars.filter(varName => !process.env[varName]);
+
+if (missingEnvVars.length > 0) {
+  console.error('❌ Missing required environment variables:', missingEnvVars);
+  console.error('💡 Please check your .env file or local-env.json file');
+  if (!isLambda) {
+    console.error('💡 For socket mode, you need SLACK_APP_TOKEN from your Slack app settings');
+    process.exit(1);
+  }
+}
 
 // Initializes your app with your bot token and signing secret
-const app = new App({
+const appConfig = {
   token: process.env.SLACK_BOT_TOKEN,
   signingSecret: process.env.SLACK_SIGNING_SECRET,
-  // Use Socket Mode for development, HTTP mode for Lambda
-  socketMode: !isLambda && isDevelopment
-});
+  // Use Socket Mode when not in Lambda, HTTP mode for Lambda
+  socketMode: !isLambda
+};
+
+// Add app token for socket mode
+if (appConfig.socketMode) {
+  appConfig.appToken = process.env.SLACK_APP_TOKEN;
+}
+
+const app = new App(appConfig);
 
 // Handle socket mode connection issues
 app.client.on('error', (error) => {

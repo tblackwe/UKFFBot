@@ -33,7 +33,7 @@ async function getData() {
             if (item.PK === 'PLAYER' && item.SK.startsWith('SLEEPER#')) {
                 // Extract sleeper ID from SK
                 const sleeperId = item.SK.replace('SLEEPER#', '');
-                data.player_map[sleeperId] = item.slackName;
+                data.player_map[sleeperId] = item.slackMemberId ?? item.slackName;
             } else if (item.PK === 'DRAFT' && item.SK.startsWith('DRAFT#')) {
                 // Extract draft ID from SK
                 const draftId = item.SK.replace('DRAFT#', '');
