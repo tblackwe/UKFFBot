@@ -1,0 +1,89 @@
+{
+  "type": "home",
+  "blocks": [
+    {
+      "type": "header",
+      "text": {
+        "type": "plain_text",
+        "text": "🏈 UKFF Fantasy Football Bot",
+        "emoji": true
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "Welcome to the UKFF Fantasy Football Bot! Use this dashboard to manage your fantasy football draft registration."
+      }
+    },
+    {
+      "type": "divider"
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*Register Player*\nLink your Slack account with your Sleeper username for draft notifications."
+      },
+      "accessory": {
+        "type": "button",
+        "text": {
+          "type": "plain_text",
+          "text": "Register Player",
+          "emoji": true
+        },
+        "style": "primary",
+        "action_id": "open_register_player_modal"
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*Register Draft*\nConnect a Sleeper draft to this channel for live pick notifications."
+      },
+      "accessory": {
+        "type": "button",
+        "text": {
+          "type": "plain_text",
+          "text": "Register Draft",
+          "emoji": true
+        },
+        "style": "secondary",
+        "action_id": "open_register_draft_modal"
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*Quick Commands*\nHere are some commands you can use:"
+      }
+    },
+    {
+      "type": "section",
+      "fields": [
+        {
+          "type": "mrkdwn",
+          "text": "*Draft Commands:*\n• `register draft [draft_id]`\n• `unregister draft`\n• `last pick`"
+        },
+        {
+          "type": "mrkdwn",
+          "text": "*Admin Commands (DM only):*\n• `list drafts`\n• `update players`"
+        }
+      ]
+    },
+    {
+      "type": "divider"
+    },
+    {
+      "type": "context",
+      "elements": [
+        {
+          "type": "mrkdwn",
+          "text": "💡 *Tip:* Admin commands can only be used in direct messages with the bot for security."
+        }
+      ]
+    }
+  ]
+}
