@@ -60,7 +60,7 @@ describe('handleLastPickCommand', () => {
                     ])
                 })
             ]),
-            text: expect.stringContaining("Pick 1.02: Player Two was selected.")
+            text: expect.stringContaining("Pick 1.02: Player Two (N/A) was selected by slack_user2. Next up: slack_user2")
         }));
     });
 

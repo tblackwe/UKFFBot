@@ -140,18 +140,22 @@ describe('DynamoDB Datastore Service', () => {
     });
 
     describe('getPlayer', () => {
-        it('should return player slack name when found', async () => {
+        it('should return player object when found', async () => {
             mockSend.mockResolvedValue({
                 Item: {
                     PK: 'PLAYER',
                     SK: 'SLEEPER#12345',
+                    slackMemberId: 'U123456',
                     slackName: 'TestUser'
                 }
             });
 
             const result = await getPlayer('12345');
 
-            expect(result).toBe('TestUser');
+            expect(result).toEqual({
+                slackMemberId: 'U123456',
+                slackName: 'TestUser'
+            });
         });
 
         it('should return null when player not found', async () => {

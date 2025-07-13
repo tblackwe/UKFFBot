@@ -52,7 +52,7 @@ function createCommandPatterns(event, say, client = null) {
     },
     { 
       pattern: /^update\s+players$/i, 
-      handler: () => handleUpdatePlayersCommand({ say, client })
+      handler: () => say("For security, the `update players` command can only be used in a direct message with me.")
     },
     { 
       pattern: /^list\sdrafts$/i, 
@@ -108,12 +108,14 @@ async function handleAppMention({ event, say, logger, client }) {
 /**
  * Handles direct message events consistently
  */
-async function handleDirectMessage({ message, say, logger }) {
+async function handleDirectMessage({ message, say, logger, client }) {
   // Only respond to direct messages or if bot is mentioned
   if (message.channel_type === 'im') {
-    if (/list drafts/i.test(message.text)) {
+    if (/list\s+drafts/i.test(message.text)) {
       const commandPayload = createCommandPayload('', message.channel);
       await handleListDraftsCommand({ command: commandPayload, say });
+    } else if (/update\s+players/i.test(message.text)) {
+      await handleUpdatePlayersCommand({ say, client });
     }
   }
 }

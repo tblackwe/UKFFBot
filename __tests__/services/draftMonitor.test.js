@@ -58,10 +58,9 @@ describe('Draft Monitor Service', () => {
             channel: channelId,
             ...mockMessagePayload,
         });
-        expect(datastore.saveData).toHaveBeenCalledTimes(1);
-        // Check that the pick count was updated before saving
-        const savedData = datastore.saveData.mock.calls[0][0];
-        expect(savedData.drafts[draftId].last_known_pick_count).toBe(2);
+        expect(datastore.saveDraft).toHaveBeenCalledTimes(1);
+        // Check that the draft was updated with the new pick count
+        expect(datastore.saveDraft).toHaveBeenCalledWith(draftId, channelId, 2);
     });
 
     it('should do nothing if no new picks are found', async () => {
@@ -89,7 +88,7 @@ describe('Draft Monitor Service', () => {
         expect(sleeper.getDraftPicks).toHaveBeenCalledWith(draftId);
         // Nothing should be posted or saved
         expect(mockApp.client.chat.postMessage).not.toHaveBeenCalled();
-        expect(datastore.saveData).not.toHaveBeenCalled();
+        expect(datastore.saveDraft).not.toHaveBeenCalled();
     });
 
     it('should do nothing if no drafts are registered', async () => {
@@ -105,6 +104,6 @@ describe('Draft Monitor Service', () => {
         // No other functions should be called
         expect(sleeper.getDraftPicks).not.toHaveBeenCalled();
         expect(mockApp.client.chat.postMessage).not.toHaveBeenCalled();
-        expect(datastore.saveData).not.toHaveBeenCalled();
+        expect(datastore.saveDraft).not.toHaveBeenCalled();
     });
 });
