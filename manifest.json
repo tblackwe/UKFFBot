@@ -20,7 +20,11 @@
                 "channels:history",
                 "chat:write",
                 "im:history",
-                "app_mentions:read"
+                "app_mentions:read",
+                "users:read",
+                "channels:read",
+                "groups:read",
+                "mpim:read"
             ]
         }
     },

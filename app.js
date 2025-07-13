@@ -1,4 +1,3 @@
-// require('dotenv').config();
 const fs = require('fs');
 const path = require('path');
 const { App } = require('@slack/bolt');
@@ -6,6 +5,7 @@ const { handleAppMention, handleDirectMessage } = require('./shared/commandPatte
 const { checkDraftForUpdates } = require('./services/draftMonitor.js');
 const { handleRegisterPlayerCommand } = require('./handlers/registerPlayer.js');
 const { handleRegisterDraftCommand } = require('./handlers/registerDraft.js');
+const { handleListDraftsCommand } = require('./handlers/listDrafts.js');
 
 // Load view templates
 const appHomeView = require('./views/appHome.json');
@@ -26,9 +26,12 @@ if (fs.existsSync(localEnvPath)) {
     });
     
     console.log('📁 Loaded local environment variables from local-env.json');
+    console.log(`   Loaded ${Object.keys(localEnv).length} environment variables`);
   } catch (error) {
     console.warn('⚠️  Warning: Could not parse local-env.json:', error.message);
   }
+} else {
+  console.log('📁 No local-env.json found, using system environment variables');
 }
 
 /**
@@ -138,29 +141,6 @@ app.event(/.+/, async ({ event, logger }) => {
   // Don't process, just log for debugging
 });
 
-// Register the app home open handler
-app.event('app_home_opened', async ({ event, client, logger }) => {
-  try {
-    // Fetch the user ID from the event
-    const userId = event.user;
-
-    // Log the event for debugging
-    logger.info(`App Home opened by user: ${userId}`);
-
-    // Call the views.publish method using the Web API
-    await client.views.publish({
-      // The ID of the user to publish the view to
-      user_id: userId,
-      // The view object to publish
-      view: appHomeView
-    });
-
-    logger.info(`App Home published for user: ${userId}`);
-  } catch (error) {
-    logger.error('Error publishing App Home:', error);
-  }
-});
-
 // Register the slash command handler
 app.command('/register_player', async ({ command, ack, respond, logger }) => {
   await ack();
@@ -184,12 +164,21 @@ app.event('app_home_opened', async ({ event, client, logger }) => {
     // Only update the home tab, not the messages tab
     if (event.tab !== 'home') return;
 
+    logger.info(`Publishing App Home for user: ${event.user}`);
+    
     await client.views.publish({
       user_id: event.user,
       view: appHomeView
     });
+    
+    logger.info(`App Home published successfully for user: ${event.user}`);
   } catch (error) {
-    logger.error('Error publishing App Home:', error);
+    logger.error('Error publishing App Home:', {
+      message: error.message,
+      code: error.code,
+      data: error.data,
+      stack: error.stack
+    });
   }
 });
 
@@ -354,10 +343,57 @@ app.view('register_draft_modal', async ({ ack, body, view, client, logger }) => 
   }
 });
 
+// Validate Slack app configuration and permissions
+async function validateSlackApp(app) {
+  try {
+    console.log('🔍 Validating Slack app configuration...');
+    
+    // Test the bot token by calling auth.test
+    const authTest = await app.client.auth.test();
+    console.log('✅ Bot token is valid');
+    console.log(`   Bot User ID: ${authTest.user_id}`);
+    console.log(`   Team: ${authTest.team}`);
+    
+    // Test a simple API call that requires the users:read scope
+    try {
+      await app.client.users.info({ user: authTest.user_id });
+      console.log('✅ users:read scope is available');
+    } catch (scopeError) {
+      console.warn('⚠️  users:read scope may be missing:', scopeError.message);
+    }
+    
+    // Check if we have basic API access
+    if (authTest.ok) {
+      console.log('✅ App has basic API access');
+    }
+    
+    return true;
+  } catch (error) {
+    console.error('❌ Slack app validation failed:', error.message);
+    
+    if (error.message.includes('invalid_auth')) {
+      console.error('💡 Check your SLACK_BOT_TOKEN - it may be invalid or expired');
+    } else if (error.message.includes('missing_scope')) {
+      console.error('💡 Your app may be missing required OAuth scopes');
+      console.error('   Required scopes: app_mentions:read, chat:write, im:history, users:read, channels:read');
+      console.error('   Please reinstall your app or update the scopes in your Slack App settings');
+    }
+    
+    return false;
+  }
+}
+
 (async () => {
   // Only start the server if we're not in Lambda environment
   if (!isLambda) {
     try {
+      // Validate Slack app configuration before starting
+      const isValid = await validateSlackApp(app);
+      if (!isValid) {
+        console.error('❌ Slack app validation failed. Please check your configuration.');
+        process.exit(1);
+      }
+      
       await app.start(process.env.PORT || 3000);
       app.logger.info('⚡️ Bolt app is running!');
 

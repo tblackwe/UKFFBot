@@ -5,7 +5,7 @@
       "type": "header",
       "text": {
         "type": "plain_text",
-        "text": "🏈 UKFF Fantasy Football Bot",
+        "text": "🏈 UKFF Fantasy Football Bot Potoat",
         "emoji": true
       }
     },
@@ -66,22 +66,6 @@
         {
           "type": "mrkdwn",
           "text": "*Draft Commands:*\n• `register draft [draft_id]`\n• `unregister draft`\n• `last pick`"
-        },
-        {
-          "type": "mrkdwn",
-          "text": "*Admin Commands (DM only):*\n• `list drafts`\n• `update players`"
-        }
-      ]
-    },
-    {
-      "type": "divider"
-    },
-    {
-      "type": "context",
-      "elements": [
-        {
-          "type": "mrkdwn",
-          "text": "💡 *Tip:* Admin commands can only be used in direct messages with the bot for security."
         }
       ]
     }
