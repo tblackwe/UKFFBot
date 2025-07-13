@@ -107,9 +107,13 @@ app.error(async (error) => {
   console.error('Slack app error:', error);
 });
 
-// Add a catch-all event handler for debugging
+// Add a catch-all event handler for debugging (exclude events we already handle)
 app.event(/.+/, async ({ event, logger }) => {
-  logger.info(`Received unhandled event: ${event.type} ${event.text}`);
+  // Skip events that we already handle specifically
+  const handledEvents = ['app_mention', 'message', 'team_join', 'member_joined_channel'];
+  if (!handledEvents.includes(event.type)) {
+    logger.info(`Received unhandled event: ${event.type}${event.text ? ` - ${event.text}` : ''}`);
+  }
   // Don't process, just log for debugging
 });
 

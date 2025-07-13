@@ -37,11 +37,6 @@ app.error(async (error) => {
   console.error('Slack app error:', error);
 });
 
-// Add a catch-all event handler for debugging
-app.event(/.+/, async ({ event, logger }) => {
-  logger.info(`Received unhandled event: ${event.type}`);
-  // Don't process, just log for debugging
-});
 
 // AWS Lambda handler
 module.exports.handler = async (event, context, callback) => {
