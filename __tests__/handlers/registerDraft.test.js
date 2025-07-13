@@ -3,6 +3,9 @@ const datastore = require('../../services/datastore.js');
 
 // Mock the datastore service
 jest.mock('../../services/datastore.js');
+jest.mock('../../shared/inputValidation.js');
+
+const { parseDraftId } = require('../../shared/inputValidation.js');
 
 describe('handleRegisterDraftCommand', () => {
     let say;
@@ -22,22 +25,14 @@ describe('handleRegisterDraftCommand', () => {
         const initialData = { player_map: {}, drafts: {} };
 
         // Setup mocks
+        parseDraftId.mockReturnValue({ isValid: true, draftId: 'new_draft_123' });
         datastore.getData.mockResolvedValue(initialData);
-        datastore.saveData.mockResolvedValue();
+        datastore.saveDraft.mockResolvedValue();
 
         await handleRegisterDraftCommand({ command, say });
 
-        // Verify that the data was saved correctly
-        const expectedSavedData = {
-            player_map: {},
-            drafts: {
-                'new_draft_123': {
-                    slack_channel_id: 'C12345',
-                    last_known_pick_count: 0
-                }
-            }
-        };
-        expect(datastore.saveData).toHaveBeenCalledWith(expectedSavedData);
+        // Verify that the draft was saved correctly
+        expect(datastore.saveDraft).toHaveBeenCalledWith('new_draft_123', 'C12345', 0);
 
         // Verify the confirmation message was sent
         expect(say).toHaveBeenCalledWith(expect.stringContaining('Successfully registered draft'));
@@ -45,13 +40,18 @@ describe('handleRegisterDraftCommand', () => {
 
     it('should return an error message if no draft ID is provided', async () => {
         const command = { text: '  ', channel_id: 'C12345' }; // Empty text
+        
+        parseDraftId.mockReturnValue({ 
+            isValid: false, 
+            errorMessage: 'Please provide a Sleeper Draft ID. Example: `@YourBotName register draft 987654321`' 
+        });
 
         await handleRegisterDraftCommand({ command, say });
 
         // Verify that no data operations were attempted
         expect(datastore.getData).not.toHaveBeenCalled();
-        expect(datastore.saveData).not.toHaveBeenCalled();
+        expect(datastore.saveDraft).not.toHaveBeenCalled();
         // Verify the correct error message was sent
-        expect(say).toHaveBeenCalledWith(expect.stringContaining('Please provide a Sleeper Draft ID'));
+        expect(say).toHaveBeenCalledWith('Please provide a Sleeper Draft ID. Example: `@YourBotName register draft 987654321`');
     });
 });

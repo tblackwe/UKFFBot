@@ -1,4 +1,14 @@
-const { getData, saveData } = require('../services/datastore.js');
+const { getData } = require('../services/datastore.js');
+const { handleCommandError, SUCCESS_MESSAGES, ERROR_MESSAGES } = require('../shared/messages.js');
+const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBDocumentClient, DeleteCommand } = require('@aws-sdk/lib-dynamodb');
+
+// Initialize DynamoDB client for direct deletion
+const client = new DynamoDBClient({
+    region: process.env.AWS_REGION || 'us-east-1'
+});
+const docClient = DynamoDBDocumentClient.from(client);
+const TABLE_NAME = process.env.DYNAMODB_TABLE_NAME || 'UKFFBot';
 
 /**
  * Handles the logic for the `unregisterdraft` command.
@@ -18,15 +28,22 @@ const handleUnregisterDraftCommand = async ({ command, say }) => {
         );
 
         if (draftIdToRemove) {
-            delete data.drafts[draftIdToRemove];
-            await saveData(data);
-            await say(`:white_check_mark: Successfully unregistered draft \`${draftIdToRemove}\` from this channel.`);
+            // Delete the draft directly from DynamoDB
+            const deleteCommand = new DeleteCommand({
+                TableName: TABLE_NAME,
+                Key: {
+                    PK: 'DRAFT',
+                    SK: `DRAFT#${draftIdToRemove}`
+                }
+            });
+            await docClient.send(deleteCommand);
+            
+            await say(SUCCESS_MESSAGES.DRAFT_UNREGISTERED(draftIdToRemove));
         } else {
-            await say('There is no draft registered for this channel.');
+            await say(ERROR_MESSAGES.NO_DRAFT_REGISTERED_SIMPLE);
         }
     } catch (error) {
-        console.error("Error in unregisterdraft command:", error);
-        await say(`:x: Sorry, I couldn't unregister the draft. There was an error updating my configuration.`);
+        await handleCommandError('unregisterdraft', error, say);
     }
 };
 

@@ -1,54 +1,225 @@
-const fsPromises = require('fs').promises;
-const { getData, saveData } = require('../../services/datastore.js');
+// Mock AWS SDK before importing the module
+const mockSend = jest.fn();
+const mockDynamoDBClient = jest.fn();
+const mockDynamoDBDocumentClient = {
+    send: mockSend
+};
 
-// Mock the 'fs' module to control its 'promises' property.
-jest.mock('fs', () => ({
-    // We need to keep other fs properties, so we require the actual module
-    ...jest.requireActual('fs'),
-    // and overwrite promises with our mock
-    promises: {
-        readFile: jest.fn(),
-        writeFile: jest.fn(),
-    },
+jest.mock('@aws-sdk/client-dynamodb', () => ({
+    DynamoDBClient: jest.fn(() => mockDynamoDBClient),
+    GetCommand: jest.fn(),
+    PutCommand: jest.fn(),
+    QueryCommand: jest.fn(),
+    ScanCommand: jest.fn(),
+    CreateTableCommand: jest.fn(),
+    DescribeTableCommand: jest.fn()
 }));
 
-describe('Datastore Service', () => {
+jest.mock('@aws-sdk/lib-dynamodb', () => ({
+    DynamoDBDocumentClient: {
+        from: jest.fn(() => mockDynamoDBDocumentClient)
+    },
+    GetCommand: jest.fn(),
+    PutCommand: jest.fn(),
+    QueryCommand: jest.fn(),
+    ScanCommand: jest.fn()
+}));
 
-    // Clear all mocks before each test to ensure a clean state
+const { 
+    getData, 
+    saveData, 
+    getPlayer, 
+    savePlayer, 
+    getDraft, 
+    saveDraft 
+} = require('../../services/datastore.js');
+
+describe('DynamoDB Datastore Service', () => {
+
     beforeEach(() => {
         jest.clearAllMocks();
+        // Set environment variables for testing
+        process.env.DYNAMODB_TABLE_NAME = 'UKFFBot-Test';
+        process.env.AWS_REGION = 'us-east-1';
     });
 
     describe('getData', () => {
-        it('should read and parse data from the file', async () => {
-            const mockData = { player_map: {}, drafts: {} };
-            const mockJson = JSON.stringify(mockData);
+        it('should scan DynamoDB and return data in the original format', async () => {
+            const mockItems = [
+                {
+                    PK: 'PLAYER',
+                    SK: 'SLEEPER#12345',
+                    slackName: 'TestUser'
+                },
+                {
+                    PK: 'DRAFT',
+                    SK: 'DRAFT#67890',
+                    slackChannelId: 'C123456',
+                    lastKnownPickCount: 10
+                }
+            ];
 
-            // Configure the mock to return our sample JSON
-            fsPromises.readFile.mockResolvedValue(mockJson);
+            mockSend.mockResolvedValue({ Items: mockItems });
 
-            const data = await getData();
+            const result = await getData();
 
-            // Expect that readFile was called correctly
-            expect(fsPromises.readFile).toHaveBeenCalledWith(expect.any(String), 'utf8');
-            // Expect the returned data to match our mock data
-            expect(data).toEqual(mockData);
+            expect(result).toEqual({
+                player_map: {
+                    '12345': 'TestUser'
+                },
+                drafts: {
+                    '67890': {
+                        slack_channel_id: 'C123456',
+                        last_known_pick_count: 10
+                    }
+                }
+            });
+        });
+
+        it('should handle empty DynamoDB response', async () => {
+            mockSend.mockResolvedValue({ Items: [] });
+
+            const result = await getData();
+
+            expect(result).toEqual({
+                player_map: {},
+                drafts: {}
+            });
+        });
+
+        it('should throw error when DynamoDB scan fails', async () => {
+            const error = new Error('DynamoDB error');
+            mockSend.mockRejectedValue(error);
+
+            await expect(getData()).rejects.toThrow('DynamoDB error');
         });
     });
 
     describe('saveData', () => {
-        it('should stringify and write data to the file', async () => {
-            const mockData = { player_map: { '123': 'testuser' }, drafts: {} };
-            const expectedJson = JSON.stringify(mockData, null, 4);
+        it('should save player_map and drafts to DynamoDB', async () => {
+            const testData = {
+                player_map: {
+                    '12345': 'TestUser',
+                    '67890': 'AnotherUser'
+                },
+                drafts: {
+                    '111': {
+                        slack_channel_id: 'C123',
+                        last_known_pick_count: 5
+                    },
+                    '222': {
+                        slack_channel_id: 'C456',
+                        last_known_pick_count: 15
+                    }
+                }
+            };
 
-            // The mock for writeFile doesn't need to return anything
-            fsPromises.writeFile.mockResolvedValue();
+            mockSend.mockResolvedValue({});
 
-            await saveData(mockData);
+            await saveData(testData);
 
-            // Expect that writeFile was called with the correct path and formatted JSON
-            expect(fsPromises.writeFile).toHaveBeenCalledWith(expect.any(String), expectedJson);
+            // Should call PutCommand for each player and draft (4 total)
+            expect(mockSend).toHaveBeenCalledTimes(4);
+        });
+
+        it('should handle partial data objects', async () => {
+            const testData = {
+                player_map: {
+                    '12345': 'TestUser'
+                }
+                // drafts is undefined
+            };
+
+            mockSend.mockResolvedValue({});
+
+            await saveData(testData);
+
+            // Should only call PutCommand for the player
+            expect(mockSend).toHaveBeenCalledTimes(1);
         });
     });
 
+    describe('getPlayer', () => {
+        it('should return player object when found', async () => {
+            mockSend.mockResolvedValue({
+                Item: {
+                    PK: 'PLAYER',
+                    SK: 'SLEEPER#12345',
+                    slackMemberId: 'U123456',
+                    slackName: 'TestUser'
+                }
+            });
+
+            const result = await getPlayer('12345');
+
+            expect(result).toEqual({
+                slackMemberId: 'U123456',
+                slackName: 'TestUser'
+            });
+        });
+
+        it('should return null when player not found', async () => {
+            mockSend.mockResolvedValue({}); // No Item property
+
+            const result = await getPlayer('99999');
+
+            expect(result).toBeNull();
+        });
+    });
+
+    describe('savePlayer', () => {
+        it('should save a single player to DynamoDB', async () => {
+            mockSend.mockResolvedValue({});
+
+            await savePlayer('12345', 'TestUser');
+
+            expect(mockSend).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe('getDraft', () => {
+        it('should return draft data when found', async () => {
+            mockSend.mockResolvedValue({
+                Item: {
+                    PK: 'DRAFT',
+                    SK: 'DRAFT#67890',
+                    slackChannelId: 'C123456',
+                    lastKnownPickCount: 10
+                }
+            });
+
+            const result = await getDraft('67890');
+
+            expect(result).toEqual({
+                slack_channel_id: 'C123456',
+                last_known_pick_count: 10
+            });
+        });
+
+        it('should return null when draft not found', async () => {
+            mockSend.mockResolvedValue({}); // No Item property
+
+            const result = await getDraft('99999');
+
+            expect(result).toBeNull();
+        });
+    });
+
+    describe('saveDraft', () => {
+        it('should save a single draft to DynamoDB with default pick count', async () => {
+            mockSend.mockResolvedValue({});
+
+            await saveDraft('67890', 'C123456');
+
+            expect(mockSend).toHaveBeenCalledTimes(1);
+        });
+
+        it('should save a single draft to DynamoDB with specified pick count', async () => {
+            mockSend.mockResolvedValue({});
+
+            await saveDraft('67890', 'C123456', 25);
+
+            expect(mockSend).toHaveBeenCalledTimes(1);
+        });
+    });
 });

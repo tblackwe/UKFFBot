@@ -1,0 +1,82 @@
+{
+  "type": "modal",
+  "callback_id": "register_player_modal",
+  "title": {
+    "type": "plain_text",
+    "text": "Register Player",
+    "emoji": true
+  },
+  "submit": {
+    "type": "plain_text",
+    "text": "Register",
+    "emoji": true
+  },
+  "close": {
+    "type": "plain_text",
+    "text": "Cancel",
+    "emoji": true
+  },
+  "blocks": [
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "Link your Slack account with your Sleeper username to receive draft notifications and participate in fantasy football activities."
+      }
+    },
+    {
+      "type": "divider"
+    },
+    {
+      "type": "input",
+      "block_id": "sleeper_username_block",
+      "element": {
+        "type": "plain_text_input",
+        "action_id": "sleeper_username_input",
+        "placeholder": {
+          "type": "plain_text",
+          "text": "Enter your Sleeper username"
+        },
+        "min_length": 1,
+        "max_length": 50
+      },
+      "label": {
+        "type": "plain_text",
+        "text": "Sleeper Username",
+        "emoji": true
+      },
+      "hint": {
+        "type": "plain_text",
+        "text": "This is your username on the Sleeper fantasy football app"
+      }
+    },
+    {
+      "type": "input",
+      "block_id": "slack_user_block",
+      "element": {
+        "type": "users_select",
+        "action_id": "slack_user_select",
+        "placeholder": {
+          "type": "plain_text",
+          "text": "Select a Slack user"
+        }
+      },
+      "label": {
+        "type": "plain_text",
+        "text": "Slack User",
+        "emoji": true
+      },
+      "hint": {
+        "type": "plain_text",
+        "text": "Select the Slack user to link with this Sleeper account"
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*Note:* You can register yourself or help register another team member. The selected Slack user will receive draft notifications."
+      }
+    }
+  ]
+}

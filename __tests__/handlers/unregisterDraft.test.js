@@ -1,3 +1,14 @@
+// Mock the AWS SDK DynamoDB client before importing the handler
+const mockSend = jest.fn();
+jest.mock('@aws-sdk/lib-dynamodb', () => ({
+    DynamoDBDocumentClient: {
+        from: jest.fn(() => ({
+            send: mockSend
+        }))
+    },
+    DeleteCommand: jest.fn()
+}));
+
 const { handleUnregisterDraftCommand } = require('../../handlers/unregisterDraft.js');
 const datastore = require('../../services/datastore.js');
 
@@ -14,7 +25,7 @@ describe('handleUnregisterDraftCommand', () => {
         say = jest.fn();
     });
 
-    it('should unregister a draft from a channel and save the data', async () => {
+    it('should unregister a draft from a channel and delete it from DynamoDB', async () => {
         const command = { channel_id: 'C123' };
         const initialData = {
             player_map: {},
@@ -26,18 +37,12 @@ describe('handleUnregisterDraftCommand', () => {
 
         // Setup mocks
         datastore.getData.mockResolvedValue(initialData);
-        datastore.saveData.mockResolvedValue();
+        mockSend.mockResolvedValue({});
 
         await handleUnregisterDraftCommand({ command, say });
 
-        // Verify that the data was saved correctly, with the draft removed
-        const expectedSavedData = {
-            player_map: {},
-            drafts: {
-                'draft456': { slack_channel_id: 'C456', last_known_pick_count: 10 }
-            }
-        };
-        expect(datastore.saveData).toHaveBeenCalledWith(expectedSavedData);
+        // Verify that the delete command was called correctly
+        expect(mockSend).toHaveBeenCalledTimes(1);
 
         // Verify the confirmation message was sent
         expect(say).toHaveBeenCalledWith(':white_check_mark: Successfully unregistered draft `draft123` from this channel.');
@@ -53,8 +58,8 @@ describe('handleUnregisterDraftCommand', () => {
 
         await handleUnregisterDraftCommand({ command, say });
 
-        // Verify that saveData was not called and the correct message was sent
-        expect(datastore.saveData).not.toHaveBeenCalled();
+        // Verify that delete was not called and the correct message was sent
+        expect(mockSend).not.toHaveBeenCalled();
         expect(say).toHaveBeenCalledWith('There is no draft registered for this channel.');
     });
 
@@ -65,7 +70,7 @@ describe('handleUnregisterDraftCommand', () => {
 
         await handleUnregisterDraftCommand({ command, say });
 
-        expect(datastore.saveData).not.toHaveBeenCalled();
+        expect(mockSend).not.toHaveBeenCalled();
         expect(say).toHaveBeenCalledWith('There is no draft registered for this channel.');
     });
 });

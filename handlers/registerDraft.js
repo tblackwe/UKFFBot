@@ -1,48 +1,48 @@
-const { getData, saveData } = require('../services/datastore.js');
+const { getData, saveDraft } = require('../services/datastore.js');
+const { handleCommandError, SUCCESS_MESSAGES } = require('../shared/messages.js');
+const { parseDraftId } = require('../shared/inputValidation.js');
 
 /**
- * Handles the logic for the /registerdraft slash command.
- * It reads the existing data.json, updates the draft information,
- * and writes it back to the file.
+ * Handles the logic for the `register draft` command.
+ * It validates the draft ID and registers it to the current channel.
  * @param {object} payload The payload from the Slack command.
  * @param {object} payload.command The command object.
  * @param {function} payload.say The function to send a message.
  */
 const handleRegisterDraftCommand = async ({ command, say }) => {
-    const draftId = command.text.trim();
     const channelId = command.channel_id;
-
-    if (!draftId) {
-        await say('Please provide a Sleeper Draft ID. Usage: `@YourBotName registerdraft [draft_id]`');
+    
+    // Validate and parse draft ID
+    const { isValid, draftId, errorMessage } = parseDraftId(command.text);
+    if (!isValid) {
+        await say(errorMessage);
         return;
     }
 
     try {
+        // Check for existing draft registration in this channel
         const data = await getData();
-
-        // Ensure the drafts object exists
-        if (!data.drafts) {
-            data.drafts = {};
-        }
-
-        // Remove any other draft that might be registered to this channel to avoid duplicates.
-        for (const id in data.drafts) {
-            if (data.drafts[id].slack_channel_id === channelId) {
-                delete data.drafts[id];
+        let existingDraftId = null;
+        
+        if (data.drafts) {
+            for (const id in data.drafts) {
+                if (data.drafts[id].slack_channel_id === channelId) {
+                    existingDraftId = id;
+                    break;
+                }
             }
         }
 
-        // Add the new draft, keyed by its ID.
-        data.drafts[draftId] = {
-            slack_channel_id: channelId,
-            last_known_pick_count: 0
-        };
-
-        await saveData(data);
-        await say(`:white_check_mark: Successfully registered draft \`${draftId}\` to this channel.`);
+        // Save the new draft registration
+        await saveDraft(draftId, channelId, 0);
+        
+        const message = existingDraftId 
+            ? `:white_check_mark: Successfully registered draft \`${draftId}\` to this channel (replaced previous draft \`${existingDraftId}\`).`
+            : SUCCESS_MESSAGES.DRAFT_REGISTERED(draftId);
+        
+        await say(message);
     } catch (error) {
-        console.error("Error in /registerdraft command:", error);
-        await say(`:x: Sorry, I couldn't register the draft. There was an error updating my configuration.`);
+        await handleCommandError('register draft', error, say);
     }
 };
 

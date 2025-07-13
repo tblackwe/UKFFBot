@@ -11,7 +11,7 @@ const handleUsageCommand = async ({ say }) => {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "Here's a list of my available commands:"
+                    "text": "*🏈 UKFF Slack Bot - Available Commands*"
                 }
             },
             {
@@ -19,35 +19,49 @@ const handleUsageCommand = async ({ say }) => {
             },
             {
                 "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "*Quick Actions:*\n• `@UKFFBot` _(no text)_ - Show registered players for this channel's draft"
+                }
+            },
+            {
+                "type": "section",
                 "fields": [
                     {
                         "type": "mrkdwn",
-                        "text": "*`lastpick`*\nFetches the most recent pick for the draft registered to this channel."
+                        "text": "*`last pick` or `latest`*\nFetches the most recent pick for the draft registered to this channel."
                     },
                     {
                         "type": "mrkdwn",
-                        "text": "*`registerdraft [draft_id]`*\nRegisters a Sleeper draft ID to this channel."
+                        "text": "*`register draft [draft_id]`*\nRegisters a Sleeper draft to this channel."
                     },
                     {
                         "type": "mrkdwn",
-                        "text": "*`registerplayer [sleeper_id] [slack_name]`*\nMaps a Sleeper user ID to a Slack username."
+                        "text": "*`register player [sleeper_username] [@slack_user]`*\nRegister a player mapping for Sleeper username to Slack user."
                     },
                     {
                         "type": "mrkdwn",
-                        "text": "*`unregisterdraft`*\nRemoves the draft registration from this channel."
+                        "text": "*`update players`*\nUpdate all player slack names from their member IDs."
                     },
                     {
                         "type": "mrkdwn",
-                        "text": "*`listdrafts`*\nLists all registered drafts (DM only)."
+                        "text": "*`unregister draft`*\nRemoves the draft registration from this channel."
                     },
                     {
                         "type": "mrkdwn",
-                        "text": "*`usage` or `help`*\nShows this help message."
+                        "text": "*`list drafts`*\nShows all registered drafts _(DM only)_."
                     }
                 ]
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "*Examples:*\n`@UKFFBot help`\n`register draft 987654321`\n`register player john_doe JohnDoe`\n`last pick`"
+                }
             }
         ],
-        text: "Here's a list of my commands: lastpick, registerdraft, unregisterdraft, registerplayer, listdrafts, usage."
+        text: "UKFF Slack Bot - Available Commands"
     };
 
     await say(usageMessage);

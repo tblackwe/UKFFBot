@@ -1,0 +1,91 @@
+{
+  "type": "modal",
+  "callback_id": "register_draft_modal",
+  "title": {
+    "type": "plain_text",
+    "text": "Register Draft",
+    "emoji": true
+  },
+  "submit": {
+    "type": "plain_text",
+    "text": "Register",
+    "emoji": true
+  },
+  "close": {
+    "type": "plain_text",
+    "text": "Cancel",
+    "emoji": true
+  },
+  "blocks": [
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "Register a Sleeper draft to receive live pick notifications in a Slack channel. You'll need the Draft ID from your Sleeper league."
+      }
+    },
+    {
+      "type": "divider"
+    },
+    {
+      "type": "input",
+      "block_id": "draft_id_block",
+      "element": {
+        "type": "plain_text_input",
+        "action_id": "draft_id_input",
+        "placeholder": {
+          "type": "plain_text",
+          "text": "e.g., 987654321"
+        },
+        "min_length": 1,
+        "max_length": 20
+      },
+      "label": {
+        "type": "plain_text",
+        "text": "Sleeper Draft ID",
+        "emoji": true
+      },
+      "hint": {
+        "type": "plain_text",
+        "text": "Find this in your Sleeper league settings or draft URL"
+      }
+    },
+    {
+      "type": "input",
+      "block_id": "channel_block",
+      "element": {
+        "type": "channels_select",
+        "action_id": "channel_select",
+        "placeholder": {
+          "type": "plain_text",
+          "text": "Select a channel"
+        }
+      },
+      "label": {
+        "type": "plain_text",
+        "text": "Slack Channel",
+        "emoji": true
+      },
+      "hint": {
+        "type": "plain_text",
+        "text": "Choose the channel where draft notifications will be posted"
+      }
+    },
+    {
+      "type": "section",
+      "text": {
+        "type": "mrkdwn",
+        "text": "*How to find your Draft ID:*\n• Go to your Sleeper league\n• Navigate to the Draft section\n• The Draft ID is in the URL or league settings\n• Example: `https://sleeper.app/draft/nfl/987654321`"
+      }
+    },
+    {
+      "type": "context",
+      "elements": [
+        {
+          "type": "mrkdwn",
+          "text": "💡 *Note:* Only one draft can be registered per channel. Registering a new draft will replace any existing registration."
+        }
+      ]
+    }
+  ]
+}

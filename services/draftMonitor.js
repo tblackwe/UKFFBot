@@ -1,6 +1,6 @@
 const { getDraftPicks, getDraft } = require('./sleeper.js');
 const { generatePickMessagePayload } = require('../handlers/lastpick.js');
-const { getData, saveData } = require('./datastore.js');
+const { getData, saveDraft } = require('./datastore.js');
 
 
 /**
@@ -23,7 +23,8 @@ async function checkDraftForUpdates(app) {
         return;
     }
 
-    let configWasUpdated = false;
+    // Track which drafts need to be updated
+    const draftsToUpdate = [];
 
     // Use Promise.all to check all registered drafts concurrently.
     await Promise.all(Object.keys(draftsToMonitor).map(async (draftId) => {
@@ -40,29 +41,33 @@ async function checkDraftForUpdates(app) {
             const lastKnownPickCount = draftInfo.last_known_pick_count || 0;
 
             if (currentPickCount > lastKnownPickCount) {
-                console.log(`Draft Monitor: New pick detected in draft ${draftId}! Pick count changed from ${lastKnownPickCount} to ${currentPickCount}.`);
+                if (process.env.NODE_ENV === 'development') {
+                    console.log(`Draft Monitor: New pick detected in draft ${draftId}! Pick count changed from ${lastKnownPickCount} to ${currentPickCount}.`);
+                }
 
                 // Generate the message payload using the reusable function
-                const messagePayload = generatePickMessagePayload(draft, picks, data);
-
+                const messagePayload = await generatePickMessagePayload(draft, picks, data, notifyNextPicker = true);
                 // Post the message to the registered channel
                 await app.client.chat.postMessage({
                     channel: draftInfo.slack_channel_id,
                     ...messagePayload
                 });
 
-                // Update the configuration with the new pick count
-                draftInfo.last_known_pick_count = currentPickCount;
-                configWasUpdated = true;
+                // Add to the list of drafts to update
+                draftsToUpdate.push({
+                    draftId,
+                    slackChannelId: draftInfo.slack_channel_id,
+                    pickCount: currentPickCount
+                });
             }
         } catch (error) {
             console.error(`Draft Monitor: Error checking draft ${draftId}.`, error);
         }
     }));
 
-    // If any draft state was updated, write the entire config file back to disk.
-    if (configWasUpdated) {
-        await saveData(data);
+    // Update all drafts that had new picks
+    for (const { draftId, slackChannelId, pickCount } of draftsToUpdate) {
+        await saveDraft(draftId, slackChannelId, pickCount);
     }
 }
 
