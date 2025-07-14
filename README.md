@@ -96,7 +96,42 @@ npm run start:sam
 
 ### Production Deployment
 
-See [`LAMBDA_DEPLOYMENT.md`](./LAMBDA_DEPLOYMENT.md) for complete AWS deployment instructions.
+#### Option 1: GitHub Actions (Recommended)
+
+This project includes comprehensive GitHub Actions workflows for automated deployment:
+
+1. **Setup GitHub Secrets** in your repository settings:
+   ```
+   AWS_ACCESS_KEY_ID=<your-aws-access-key>
+   AWS_SECRET_ACCESS_KEY=<your-aws-secret-key>
+   SLACK_BOT_TOKEN=xoxb-your-bot-token
+   SLACK_SIGNING_SECRET=your-signing-secret
+   ```
+
+2. **Deploy to Production**:
+   - Push to `main` branch for automatic production deployment
+   - Or use manual dispatch in GitHub Actions for any environment
+
+3. **Deploy to Staging**:
+   - Push to `develop` branch for automatic staging deployment
+
+4. **Features**:
+   - Automated testing before deployment
+   - Multi-environment support (dev/staging/prod)
+   - Smoke tests after deployment
+   - Rollback capabilities
+   - Database backup/restore operations
+
+See [`.github/workflows/README.md`](./.github/workflows/README.md) for detailed workflow documentation.
+
+#### Option 2: Manual Deployment
+
+For manual deployment using the included script:
+```bash
+./deploy.sh [environment]
+```
+
+See [`LAMBDA_DEPLOYMENT.md`](./LAMBDA_DEPLOYMENT.md) for complete manual deployment instructions.
 
 ## 🧪 Testing
 
