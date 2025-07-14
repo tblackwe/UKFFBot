@@ -501,7 +501,7 @@ const handleLastPickCommand = async ({ command, say }) => {
     }
 
     // Validate pick data and determine display strategy
-    let useMultiPickDisplay = false;
+    let useMultiPickDisplay = false; // Initialize to false - only set to true when conditions are met
     let newPicksStartIndex = 0;
 
     // Only attempt multi-pick logic if the feature is enabled
@@ -521,32 +521,34 @@ const handleLastPickCommand = async ({ command, say }) => {
           if (pickRange.hasNewPicks && pickRange.count > 1) {
             useMultiPickDisplay = true;
             newPicksStartIndex = pickRange.startIndex;
+            console.log(`Multi-pick display enabled: ${pickRange.count} new picks found`);
+          } else if (pickRange.hasNewPicks) {
+            console.log(`Single new pick found, using single-pick display`);
+          } else {
+            console.log(`No new picks found since last update`);
           }
         } catch (error) {
           console.warn(
             "Error calculating new picks range, falling back to single-pick display:",
             error
           );
-          // Fall back to single-pick display
-          useMultiPickDisplay = false;
+          // useMultiPickDisplay remains false
         }
       } else {
         console.warn(
           "Pick data validation failed, falling back to single-pick display:",
           validation.error
         );
-        // Fall back to single-pick display
-        useMultiPickDisplay = false;
+        // useMultiPickDisplay remains false
       }
     } else if (!MULTI_PICK_CONFIG.ENABLE_MULTI_PICK) {
-      // Feature is disabled, use single-pick display
-      useMultiPickDisplay = false;
+      console.log("Multi-pick feature is disabled, using single-pick display");
+      // useMultiPickDisplay remains false
     } else {
       console.warn(
         "Missing or invalid last_known_pick_count, falling back to single-pick display"
       );
-      // Fall back to single-pick display when no valid baseline exists
-      useMultiPickDisplay = false;
+      // useMultiPickDisplay remains false
     }
 
     // Generate appropriate message payload
