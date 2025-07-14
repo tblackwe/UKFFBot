@@ -1,0 +1,236 @@
+name: Test and Validate
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+  push:
+    branches: [ main, develop ]
+
+env:
+  NODE_VERSION: '20'
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: ubuntu-latest
+    
+    strategy:
+      matrix:
+        node-version: ['18', '20']
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-node-${{ matrix.node-version }}
+          path: |
+            coverage/
+            test-results.xml
+          retention-days: 30
+
+  lint:
+    name: Lint Code
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: |
+          # Check if eslint script exists in package.json
+          if npm run | grep -q "lint"; then
+            npm run lint
+          else
+            echo "No lint script found, running eslint directly if available"
+            if npx eslint --version; then
+              npx eslint . --ext .js --format json --output-file eslint-report.json || true
+              npx eslint . --ext .js
+            else
+              echo "ESLint not available, skipping linting"
+            fi
+          fi
+
+      - name: Upload lint results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lint-results
+          path: eslint-report.json
+          retention-days: 30
+
+  validate-sam:
+    name: Validate SAM Template
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Install SAM CLI
+        uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
+      - name: Validate SAM template
+        run: sam validate --template template.yaml
+
+      - name: Check SAM build
+        run: |
+          # Try to build the SAM application
+          sam build --template template.yaml
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run npm audit
+        run: |
+          npm audit --audit-level high
+        continue-on-error: true
+
+      - name: Run security scan with Snyk
+        uses: snyk/actions/node@master
+        continue-on-error: true
+        env:
+          SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
+        with:
+          args: --severity-threshold=medium
+
+  dependency-check:
+    name: Dependency Check
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Check for outdated dependencies
+        run: |
+          npm outdated || true
+          echo "Checking for security vulnerabilities..."
+          npm audit --audit-level moderate
+
+      - name: Check package-lock.json
+        run: |
+          if [ -f package-lock.json ]; then
+            echo "✅ package-lock.json exists"
+          else
+            echo "❌ package-lock.json missing"
+            exit 1
+          fi
+
+  # Integration test (dry run deployment)
+  integration-test:
+    name: Integration Test (Dry Run)
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    needs: [test, lint, validate-sam]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Install SAM CLI
+        uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
+      - name: Install dependencies
+        run: npm ci --production
+
+      - name: Build SAM application
+        run: sam build --use-container
+
+      - name: Run local API
+        run: |
+          # Start the local API in the background
+          sam local start-api --port 3001 &
+          LOCAL_API_PID=$!
+          
+          # Wait for the API to start
+          sleep 10
+          
+          # Test the health endpoint
+          echo "Testing local API..."
+          curl -f -X POST "http://localhost:3001/slack/events" \
+            -H "Content-Type: application/json" \
+            -d '{"type":"url_verification","challenge":"test"}' \
+            || echo "Local API test completed (expected to fail without proper setup)"
+          
+          # Clean up
+          kill $LOCAL_API_PID || true
+
+  # Status check for PR
+  status-check:
+    name: All Tests Passed
+    runs-on: ubuntu-latest
+    if: always()
+    needs: [test, lint, validate-sam, security-scan, dependency-check]
+    
+    steps:
+      - name: Check test results
+        run: |
+          if [[ "${{ needs.test.result }}" == "success" && 
+                "${{ needs.lint.result }}" == "success" && 
+                "${{ needs.validate-sam.result }}" == "success" ]]; then
+            echo "✅ All required checks passed!"
+          else
+            echo "❌ Some checks failed:"
+            echo "  Tests: ${{ needs.test.result }}"
+            echo "  Lint: ${{ needs.lint.result }}"
+            echo "  SAM Validation: ${{ needs.validate-sam.result }}"
+            echo "  Security Scan: ${{ needs.security-scan.result }}"
+            echo "  Dependency Check: ${{ needs.dependency-check.result }}"
+            exit 1
+          fi

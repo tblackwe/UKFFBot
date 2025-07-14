@@ -1,0 +1,299 @@
+name: Operations and Maintenance
+
+on:
+  workflow_dispatch:
+    inputs:
+      operation:
+        description: 'Operation to perform'
+        required: true
+        type: choice
+        options:
+          - backup-database
+          - restore-database
+          - cleanup-logs
+          - update-dependencies
+          - run-diagnostics
+          - rollback-deployment
+      environment:
+        description: 'Environment'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - staging
+          - prod
+      backup_file:
+        description: 'Backup file name (for restore operation)'
+        required: false
+        type: string
+      rollback_version:
+        description: 'Version to rollback to (git commit or tag)'
+        required: false
+        type: string
+
+env:
+  AWS_REGION: us-east-1
+  NODE_VERSION: '20'
+
+jobs:
+  operations:
+    name: ${{ github.event.inputs.operation }}
+    runs-on: ubuntu-latest
+    environment: ${{ github.event.inputs.environment }}
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.rollback_version || github.sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'npm'
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install AWS CLI and SAM CLI
+        uses: aws-actions/setup-sam@v2
+        with:
+          use-installer: true
+
+      - name: Set environment variables
+        run: |
+          ENVIRONMENT="${{ github.event.inputs.environment }}"
+          STACK_NAME="ukff-slack-bot-${ENVIRONMENT}"
+          TABLE_NAME="UKFFBot-${ENVIRONMENT}"
+          
+          echo "ENVIRONMENT=$ENVIRONMENT" >> $GITHUB_ENV
+          echo "STACK_NAME=$STACK_NAME" >> $GITHUB_ENV
+          echo "TABLE_NAME=$TABLE_NAME" >> $GITHUB_ENV
+
+      # Backup Database Operation
+      - name: Backup Database
+        if: github.event.inputs.operation == 'backup-database'
+        run: |
+          echo "🗄️ Creating database backup for $ENVIRONMENT environment..."
+          
+          BACKUP_FILE="ukff-bot-backup-${ENVIRONMENT}-$(date +%Y%m%d-%H%M%S).json"
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          S3_BUCKET="ukff-slack-bot-backups-${ACCOUNT_ID}"
+          
+          # Create backup bucket if it doesn't exist
+          if ! aws s3 ls "s3://$S3_BUCKET" 2>/dev/null; then
+            aws s3 mb "s3://$S3_BUCKET" --region ${{ env.AWS_REGION }}
+          fi
+          
+          # Export DynamoDB table to JSON
+          aws dynamodb scan \
+            --table-name $TABLE_NAME \
+            --output json \
+            > $BACKUP_FILE
+          
+          # Upload to S3
+          aws s3 cp $BACKUP_FILE "s3://$S3_BUCKET/$BACKUP_FILE"
+          
+          echo "✅ Backup created: s3://$S3_BUCKET/$BACKUP_FILE"
+          echo "backup_file=$BACKUP_FILE" >> $GITHUB_OUTPUT
+
+      # Restore Database Operation
+      - name: Restore Database
+        if: github.event.inputs.operation == 'restore-database'
+        run: |
+          if [[ -z "${{ github.event.inputs.backup_file }}" ]]; then
+            echo "❌ Backup file name is required for restore operation"
+            exit 1
+          fi
+          
+          echo "🔄 Restoring database from backup for $ENVIRONMENT environment..."
+          
+          BACKUP_FILE="${{ github.event.inputs.backup_file }}"
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          S3_BUCKET="ukff-slack-bot-backups-${ACCOUNT_ID}"
+          
+          # Download backup from S3
+          aws s3 cp "s3://$S3_BUCKET/$BACKUP_FILE" $BACKUP_FILE
+          
+          # Clear existing table (WARNING: This is destructive!)
+          echo "⚠️  Clearing existing table data..."
+          aws dynamodb scan --table-name $TABLE_NAME --output json | \
+            jq -r '.Items[] | [.PK.S, .SK.S] | @tsv' | \
+            while IFS=$'\t' read -r pk sk; do
+              aws dynamodb delete-item \
+                --table-name $TABLE_NAME \
+                --key "{\"PK\":{\"S\":\"$pk\"},\"SK\":{\"S\":\"$sk\"}}"
+            done
+          
+          # Restore data from backup
+          echo "📥 Restoring data from backup..."
+          cat $BACKUP_FILE | jq -r '.Items[] | @base64' | \
+            while read item; do
+              echo $item | base64 --decode | \
+                aws dynamodb put-item --table-name $TABLE_NAME --item file:///dev/stdin
+            done
+          
+          echo "✅ Database restored from $BACKUP_FILE"
+
+      # Cleanup Logs Operation
+      - name: Cleanup Logs
+        if: github.event.inputs.operation == 'cleanup-logs'
+        run: |
+          echo "🧹 Cleaning up old CloudWatch logs for $ENVIRONMENT environment..."
+          
+          # Get all log groups for this environment
+          LOG_GROUPS=$(aws logs describe-log-groups \
+            --log-group-name-prefix "/aws/lambda/ukff" \
+            --query 'logGroups[?contains(logGroupName, `'$ENVIRONMENT'`)].logGroupName' \
+            --output text)
+          
+          # Set retention policy to 7 days for older log streams
+          for LOG_GROUP in $LOG_GROUPS; do
+            echo "Processing log group: $LOG_GROUP"
+            
+            # Get log streams older than 7 days
+            CUTOFF_DATE=$(date -d '7 days ago' +%s)000
+            OLD_STREAMS=$(aws logs describe-log-streams \
+              --log-group-name $LOG_GROUP \
+              --query "logStreams[?lastEventTime < \`$CUTOFF_DATE\`].logStreamName" \
+              --output text)
+            
+            # Delete old log streams
+            for STREAM in $OLD_STREAMS; do
+              if [[ -n "$STREAM" ]]; then
+                echo "Deleting old log stream: $STREAM"
+                aws logs delete-log-stream \
+                  --log-group-name $LOG_GROUP \
+                  --log-stream-name $STREAM || true
+              fi
+            done
+          done
+          
+          echo "✅ Log cleanup completed"
+
+      # Update Dependencies Operation
+      - name: Update Dependencies
+        if: github.event.inputs.operation == 'update-dependencies'
+        run: |
+          echo "📦 Checking for dependency updates..."
+          
+          # Check for outdated packages
+          npm outdated || true
+          
+          # Update patch and minor versions
+          npm update
+          
+          # Run security audit
+          npm audit --audit-level moderate
+          
+          # Check if package-lock.json changed
+          if git diff --name-only | grep -q package-lock.json; then
+            echo "📝 package-lock.json has been updated"
+            
+            # Create a pull request with the updates (if this was a real deployment)
+            echo "In a real scenario, you would create a PR with these updates"
+            git diff package-lock.json
+          else
+            echo "✅ Dependencies are up to date"
+          fi
+
+      # Run Diagnostics Operation
+      - name: Run Diagnostics
+        if: github.event.inputs.operation == 'run-diagnostics'
+        run: |
+          echo "🔍 Running diagnostics for $ENVIRONMENT environment..."
+          
+          # Check stack status
+          echo "=== Stack Status ==="
+          aws cloudformation describe-stacks \
+            --stack-name $STACK_NAME \
+            --query 'Stacks[0].{Status:StackStatus,Created:CreationTime,Updated:LastUpdatedTime}' \
+            --output table
+          
+          # Check Lambda function status
+          echo "=== Lambda Functions ==="
+          aws lambda list-functions \
+            --query "Functions[?contains(FunctionName, 'ukff') && contains(FunctionName, '$ENVIRONMENT')].[FunctionName,Runtime,LastModified,State]" \
+            --output table
+          
+          # Check DynamoDB table status
+          echo "=== DynamoDB Table ==="
+          aws dynamodb describe-table \
+            --table-name $TABLE_NAME \
+            --query 'Table.{Status:TableStatus,ItemCount:ItemCount,Size:TableSizeBytes,Created:CreationDateTime}' \
+            --output table
+          
+          # Check recent errors in CloudWatch Logs
+          echo "=== Recent Errors ==="
+          LOG_GROUP="/aws/lambda/ukff-slack-bot-${ENVIRONMENT}"
+          if aws logs describe-log-groups --log-group-name-prefix $LOG_GROUP --query 'logGroups[0]' --output text > /dev/null 2>&1; then
+            aws logs filter-log-events \
+              --log-group-name $LOG_GROUP \
+              --start-time $(date -d '1 hour ago' +%s)000 \
+              --filter-pattern "ERROR" \
+              --query 'events[*].[timestamp,message]' \
+              --output table || echo "No recent errors found"
+          else
+            echo "Log group not found: $LOG_GROUP"
+          fi
+          
+          echo "✅ Diagnostics completed"
+
+      # Rollback Deployment Operation
+      - name: Rollback Deployment
+        if: github.event.inputs.operation == 'rollback-deployment'
+        env:
+          SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
+          SLACK_SIGNING_SECRET: ${{ secrets.SLACK_SIGNING_SECRET }}
+        run: |
+          if [[ -z "${{ github.event.inputs.rollback_version }}" ]]; then
+            echo "❌ Rollback version is required for rollback operation"
+            exit 1
+          fi
+          
+          echo "⏪ Rolling back deployment to version: ${{ github.event.inputs.rollback_version }}"
+          
+          # The code is already checked out to the specified version
+          # Install dependencies and deploy
+          npm ci --production
+          sam build --use-container
+          
+          ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+          S3_BUCKET="ukff-slack-bot-deployments-${ACCOUNT_ID}"
+          
+          sam deploy \
+            --stack-name $STACK_NAME \
+            --s3-bucket $S3_BUCKET \
+            --capabilities CAPABILITY_IAM \
+            --region ${{ env.AWS_REGION }} \
+            --parameter-overrides \
+              SlackBotToken=$SLACK_BOT_TOKEN \
+              SlackSigningSecret=$SLACK_SIGNING_SECRET \
+              Environment=$ENVIRONMENT \
+            --no-fail-on-empty-changeset \
+            --no-confirm-changeset \
+            --tags \
+              Application=UKFFBot \
+              Environment=$ENVIRONMENT \
+              GitCommit=${{ github.event.inputs.rollback_version }} \
+              DeployedBy=GitHubActions-Rollback
+          
+          echo "✅ Rollback to ${{ github.event.inputs.rollback_version }} completed"
+
+      - name: Summary
+        if: always()
+        run: |
+          echo "🎯 Operation Summary:"
+          echo "  Operation: ${{ github.event.inputs.operation }}"
+          echo "  Environment: ${{ github.event.inputs.environment }}"
+          echo "  Status: ${{ job.status }}"
+          echo "  Timestamp: $(date -u '+%Y-%m-%d %H:%M:%S UTC')"

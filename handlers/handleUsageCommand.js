@@ -19,13 +19,6 @@ const handleUsageCommand = async ({ say }) => {
             },
             {
                 "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": "*Quick Actions:*\n• `@UKFFBot` _(no text)_ - Show registered players for this channel's draft"
-                }
-            },
-            {
-                "type": "section",
                 "fields": [
                     {
                         "type": "mrkdwn",
@@ -37,19 +30,11 @@ const handleUsageCommand = async ({ say }) => {
                     },
                     {
                         "type": "mrkdwn",
-                        "text": "*`register player [sleeper_username] [@slack_user]`*\nRegister a player mapping for Sleeper username to Slack user."
-                    },
-                    {
-                        "type": "mrkdwn",
-                        "text": "*`update players`*\nUpdate all player slack names from their member IDs."
+                        "text": "*`register player [sleeper_username] [@slack_user]`*\nRegister a player mapping for Sleeper username to Slack user. Ask Yukon for help if registration looks broken. Awaiting stimhack admin to fix permissions on username lookup."
                     },
                     {
                         "type": "mrkdwn",
                         "text": "*`unregister draft`*\nRemoves the draft registration from this channel."
-                    },
-                    {
-                        "type": "mrkdwn",
-                        "text": "*`list drafts`*\nShows all registered drafts _(DM only)_."
                     }
                 ]
             },
