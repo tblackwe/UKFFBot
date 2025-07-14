@@ -106,4 +106,74 @@ describe('Draft Monitor Service', () => {
         expect(mockApp.client.chat.postMessage).not.toHaveBeenCalled();
         expect(datastore.saveDraft).not.toHaveBeenCalled();
     });
+
+    it('should continue to use generatePickMessagePayload correctly for backward compatibility', async () => {
+        // Arrange
+        const draftId = 'draft123';
+        const channelId = 'C123';
+        const mockData = {
+            drafts: {
+                [draftId]: {
+                    slack_channel_id: channelId,
+                    last_known_pick_count: 0,
+                },
+            },
+            player_map: { 'user1': 'slack_user1' },
+        };
+        const mockPicks = [
+            { 
+                pick_no: 1, 
+                round: 1, 
+                metadata: { first_name: 'Player', last_name: 'One', position: 'RB' }, 
+                picked_by: 'user1' 
+            }
+        ];
+        const mockDraft = { 
+            type: 'linear',
+            settings: { rounds: 1, teams: 1 },
+            draft_order: { 'user1': 1 },
+            status: 'in_progress'
+        };
+        const expectedMessagePayload = { 
+            text: 'Pick 1.01: Player One (RB) was selected by slack_user1. The draft is complete!', 
+            blocks: [
+                { type: 'section', text: { type: 'mrkdwn', text: ':alarm_clock: *PICK ALERT!* :alarm_clock:' } },
+                { 
+                    type: 'section', 
+                    fields: [
+                        { type: 'mrkdwn', text: '*Pick:* `1.01`' },
+                        { type: 'mrkdwn', text: '*Player:* `Player One - RB`' },
+                        { type: 'mrkdwn', text: '*Picked By:* slack_user1' }
+                    ]
+                },
+                { type: 'divider' },
+                { type: 'section', text: { type: 'mrkdwn', text: '*On The Clock:* The draft is complete!' } }
+            ]
+        };
+
+        datastore.getData.mockResolvedValue(mockData);
+        sleeper.getDraftPicks.mockResolvedValue(mockPicks);
+        sleeper.getDraft.mockResolvedValue(mockDraft);
+        generatePickMessagePayload.mockReturnValue(expectedMessagePayload);
+        datastore.saveData.mockResolvedValue();
+
+        // Act
+        await checkDraftForUpdates(mockApp);
+
+        // Assert
+        expect(generatePickMessagePayload).toHaveBeenCalledTimes(1);
+        expect(generatePickMessagePayload).toHaveBeenCalledWith(mockDraft, mockPicks, mockData, true);
+        expect(mockApp.client.chat.postMessage).toHaveBeenCalledWith({
+            channel: channelId,
+            ...expectedMessagePayload,
+        });
+        
+        // Verify the message structure is exactly what draftMonitor expects
+        const postedMessage = mockApp.client.chat.postMessage.mock.calls[0][0];
+        expect(postedMessage).toHaveProperty('text');
+        expect(postedMessage).toHaveProperty('blocks');
+        expect(postedMessage.text).toContain('Player One (RB)');
+        expect(postedMessage.blocks).toHaveLength(4);
+        expect(postedMessage.blocks[0].text.text).toContain('PICK ALERT');
+    });
 });
