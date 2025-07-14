@@ -82,9 +82,19 @@ const appConfig = {
   socketMode: !isLambda
 };
 
-// Add app token for socket mode
+// Add app token and enhanced configuration for socket mode
 if (appConfig.socketMode) {
   appConfig.appToken = process.env.SLACK_APP_TOKEN;
+  // Add socket mode client options for better connection handling
+  appConfig.clientOptions = {
+    retryConfig: {
+      retries: 10,
+      factor: 1.96,
+      minTimeout: 1000,
+      maxTimeout: 30000,
+      randomize: true
+    }
+  };
 }
 
 const app = new App(appConfig);
@@ -93,6 +103,30 @@ const app = new App(appConfig);
 app.client.on('error', (error) => {
   console.error('Slack client error:', error);
 });
+
+// Add better error handling for socket mode
+if (!isLambda) {
+  // Handle socket mode specific events using the correct API
+  process.on('unhandledRejection', (reason, promise) => {
+    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    // Don't crash the app for socket mode connection issues
+    if (reason && reason.message && reason.message.includes('Unhandled event')) {
+      console.log('🔄 Socket mode connection issue detected, continuing...');
+      return;
+    }
+  });
+  
+  process.on('uncaughtException', (error) => {
+    console.error('Uncaught Exception:', error);
+    // Log but don't crash for socket mode issues
+    if (error.message && error.message.includes('Unhandled event')) {
+      console.log('🔄 Socket mode connection issue detected, continuing...');
+      return;
+    }
+    // For other uncaught exceptions, we should still exit
+    process.exit(1);
+  });
+}
 
 app.message('listdrafts', async ({ event, say }) => {
   const commandPayload = {
@@ -399,7 +433,14 @@ async function validateSlackApp(app) {
 
       // Start the draft monitor job only in server mode (not Lambda)
       const monitorIntervalMs = 60 * 1000; // 1 minute
-      setInterval(() => checkDraftForUpdates(app), monitorIntervalMs);
+      setInterval(async () => {
+        try {
+          await checkDraftForUpdates(app);
+        } catch (error) {
+          console.error('Draft monitor error:', error.message);
+          // Don't crash the app, just log the error and continue
+        }
+      }, monitorIntervalMs);
       app.logger.info(`Draft monitor started. Checking for new picks every ${monitorIntervalMs / 1000} seconds.`);
     } catch (error) {
       app.logger.error('Failed to start app:', error);
