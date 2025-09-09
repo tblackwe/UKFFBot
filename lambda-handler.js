@@ -235,9 +235,6 @@ app.view('register_draft_modal', async ({ ack, body, view, client, logger }) => 
 });
 
 
-// Simple in-memory cache for event deduplication (Lambda container lifecycle)
-const processedEvents = new Set();
-
 /**
  * Check if an event has been processed using DynamoDB
  */
@@ -299,22 +296,13 @@ module.exports.handler = async (event, context, callback) => {
 
   console.log(`[LAMBDA] Processing event ${eventId} at ${new Date().toISOString()}`);
 
-  // Check in-memory cache first (fast check)
-  if (processedEvents.has(eventId)) {
-    console.log(`[LAMBDA] Duplicate event ${eventId} detected in memory, skipping`);
-    return {
-      statusCode: 200,
-      body: JSON.stringify({ message: 'Event already processed (memory)' })
-    };
-  }
-
   // Check DynamoDB for deduplication (persistent check)
   const alreadyProcessed = await isEventProcessed(eventId);
   if (alreadyProcessed) {
-    console.log(`[LAMBDA] Duplicate event ${eventId} detected in DynamoDB, skipping`);
+    console.log(`[LAMBDA] Duplicate event ${eventId} detected, skipping`);
     return {
       statusCode: 200,
-      body: JSON.stringify({ message: 'Event already processed (DynamoDB)' })
+      body: JSON.stringify({ message: 'Event already processed' })
     };
   }
 
@@ -326,16 +314,6 @@ module.exports.handler = async (event, context, callback) => {
       statusCode: 200,
       body: JSON.stringify({ message: 'Event processed by another instance' })
     };
-  }
-
-  // Add to in-memory cache
-  processedEvents.add(eventId);
-
-  // Clean up old events (keep last 100 to prevent memory leaks)
-  if (processedEvents.size > 100) {
-    const eventsArray = Array.from(processedEvents);
-    processedEvents.clear();
-    eventsArray.slice(-50).forEach(id => processedEvents.add(id));
   }
 
   if (process.env.NODE_ENV === 'development') {

@@ -42,12 +42,11 @@ const handleCheckRostersCommand = async ({ command, say, ack }) => {
             return;
         }
 
-        console.log(`[CHECK_ROSTERS] Found ${leagues.length} leagues for request ${requestId}, sending initial message`);
+        console.log(`[CHECK_ROSTERS] Found ${leagues.length} leagues for request ${requestId}, starting analysis`);
         // Show initial message
         await threadedSay('🔍 Analyzing rosters for issues... This may take a moment.');
 
-        // Process leagues synchronously but with a small delay to allow the initial message to be sent
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Process leagues synchronously
         
         console.log(`[CHECK_ROSTERS] Starting roster analysis for request ${requestId}`);
         

@@ -7,9 +7,7 @@
     "start:local": "node app.js",
     "start:sam": "sam local start-api --port 3000 --env-vars local-env.json",
     "test": "jest",
-    "build": "npm ci --production",
-    "package": "zip -r ukff-bot.zip . -x '*.git*' 'node_modules/.cache/*' '__tests__/*' '*.md'",
-    "deploy": "aws lambda update-function-code --function-name ukff-slack-bot --zip-file fileb://ukff-bot.zip"
+    "build": "npm ci --production"
   },
   "jest": {
     "testEnvironment": "node"
