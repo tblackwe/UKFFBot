@@ -82,12 +82,40 @@ describe('NFL Data Cache Service', () => {
             '456': { player_id: '456', full_name: 'Another Player', position: 'RB' }
         };
 
+        // Ultra-minimal format that would be stored in cache
+        const mockMinimalPlayers = {
+            '123': { n: 'Test Player', t: null, p: 'QB' },
+            '456': { n: 'Another Player', t: null, p: 'RB' }
+        };
+
+        // Expected expanded format returned to caller
+        const expectedExpandedPlayers = {
+            '123': { 
+                player_id: '123', 
+                full_name: 'Test Player', 
+                team: null,
+                fantasy_positions: ['QB'],
+                injury_status: null,
+                active: true,
+                position: 'QB' 
+            },
+            '456': { 
+                player_id: '456', 
+                full_name: 'Another Player', 
+                team: null,
+                fantasy_positions: ['RB'],
+                injury_status: null,
+                active: true,
+                position: 'RB' 
+            }
+        };
+
         it('should return cached players if available', async () => {
-            mockDatastore.getNflPlayers.mockResolvedValue(mockPlayers);
+            mockDatastore.getNflPlayers.mockResolvedValue(mockMinimalPlayers);
 
             const result = await getAllPlayersWithCache('nfl');
 
-            expect(result).toEqual(mockPlayers);
+            expect(result).toEqual(expectedExpandedPlayers);
             expect(mockDatastore.getNflPlayers).toHaveBeenCalledWith('nfl');
             expect(mockSleeper.getAllPlayers).not.toHaveBeenCalled();
         });
@@ -99,32 +127,24 @@ describe('NFL Data Cache Service', () => {
 
             const result = await getAllPlayersWithCache('nfl');
 
-            expect(result).toEqual(mockPlayers);
+            expect(result).toEqual(expectedExpandedPlayers);
             expect(mockDatastore.getNflPlayers).toHaveBeenCalledWith('nfl');
             expect(mockSleeper.getAllPlayers).toHaveBeenCalledWith('nfl');
             
-            // Should save essential data, not full mockPlayers
-            const expectedEssentialData = {
+            // Should save ultra-minimal data
+            const expectedMinimalData = {
                 '123': {
-                    player_id: '123',
-                    full_name: 'Test Player',
-                    team: null,
-                    fantasy_positions: ['QB'],
-                    injury_status: null,
-                    active: true,
-                    position: 'QB'
+                    n: 'Test Player',
+                    t: null,
+                    p: 'QB'
                 },
                 '456': {
-                    player_id: '456',
-                    full_name: 'Another Player',
-                    team: null,
-                    fantasy_positions: ['RB'],
-                    injury_status: null,
-                    active: true,
-                    position: 'RB'
+                    n: 'Another Player',
+                    t: null,
+                    p: 'RB'
                 }
             };
-            expect(mockDatastore.saveNflPlayers).toHaveBeenCalledWith('nfl', expectedEssentialData);
+            expect(mockDatastore.saveNflPlayers).toHaveBeenCalledWith('nfl', expectedMinimalData);
         });
 
         it('should throw error if API fails', async () => {
@@ -156,19 +176,15 @@ describe('NFL Data Cache Service', () => {
             expect(result).toEqual(mockPlayers);
             expect(mockSleeper.getAllPlayers).toHaveBeenCalledWith('nfl');
             
-            // Should save essential data, not full mockPlayers
-            const expectedEssentialData = {
+            // Should save ultra-minimal data
+            const expectedMinimalData = {
                 '123': {
-                    player_id: '123',
-                    full_name: 'Test Player',
-                    team: null,
-                    fantasy_positions: ['UNKNOWN'],
-                    injury_status: null,
-                    active: true,
-                    position: 'UNKNOWN'
+                    n: 'Test Player',
+                    t: null,
+                    p: 'UNKNOWN'
                 }
             };
-            expect(mockDatastore.saveNflPlayers).toHaveBeenCalledWith('nfl', expectedEssentialData);
+            expect(mockDatastore.saveNflPlayers).toHaveBeenCalledWith('nfl', expectedMinimalData);
         });
 
         it('should throw error if API fails', async () => {

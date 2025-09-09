@@ -10,20 +10,12 @@ const { handleCommandError } = require('../shared/messages.js');
  * @param {function} payload.say The function to send a message.
  */
 const handleCheckRostersCommand = async ({ command, say, ack }) => {
-    const requestId = `check-rosters-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-    console.log(`[CHECK_ROSTERS] Starting request ${requestId} for channel ${command.channel_id}`);
-    
-    if (ack) {
-        console.log(`[CHECK_ROSTERS] Acknowledging request ${requestId}`);
-        await ack();
-    }
-    
+    if (ack) await ack();
     const channelId = command.channel_id;
     const threadTs = command.ts; // Get the timestamp for threading
     
     // Create a threaded say function if we have a timestamp
     const threadedSay = async (message) => {
-        console.log(`[CHECK_ROSTERS] Sending message for request ${requestId}: ${typeof message === 'string' ? message.substring(0, 50) : 'object'}...`);
         if (threadTs) {
             return say({ text: message, thread_ts: threadTs });
         } else {
@@ -32,28 +24,20 @@ const handleCheckRostersCommand = async ({ command, say, ack }) => {
     };
 
     try {
-        console.log(`[CHECK_ROSTERS] Getting leagues for channel ${channelId} (request ${requestId})`);
         // Get leagues registered to this channel
         const leagues = await getLeaguesByChannel(channelId);
         
         if (leagues.length === 0) {
-            console.log(`[CHECK_ROSTERS] No leagues found for request ${requestId}`);
             await threadedSay('📭 No leagues are registered to this channel.\n\nUse `@UKFFBot register league [league_id]` first to register a Sleeper league.');
             return;
         }
 
-        console.log(`[CHECK_ROSTERS] Found ${leagues.length} leagues for request ${requestId}, starting analysis`);
         // Show initial message
         await threadedSay('🔍 Analyzing rosters for issues... This may take a moment.');
 
-        // Process leagues synchronously
-        
-        console.log(`[CHECK_ROSTERS] Starting roster analysis for request ${requestId}`);
-        
         // Analyze each league
         for (const league of leagues) {
             try {
-                console.log(`[CHECK_ROSTERS] Analyzing league ${league.leagueId} for request ${requestId}`);
                 const analysis = await analyzeLeagueRosters(league.leagueId);
                 const message = formatAnalysisMessage(analysis);
                 
@@ -61,10 +45,8 @@ const handleCheckRostersCommand = async ({ command, say, ack }) => {
                 const leagueHeader = `\n**${league.leagueName}** (${league.season})\n${'-'.repeat(40)}`;
                 await threadedSay(leagueHeader + '\n' + message);
                 
-                console.log(`[CHECK_ROSTERS] Completed analysis for league ${league.leagueId} (request ${requestId})`);
-                
             } catch (error) {
-                console.error(`[CHECK_ROSTERS] Error analyzing league ${league.leagueId} for request ${requestId}:`, error);
+                console.error(`Error analyzing league ${league.leagueId}:`, error);
                 await threadedSay(`❌ Failed to analyze league "${league.leagueName}": ${error.message}`);
             }
         }
@@ -81,10 +63,10 @@ const handleCheckRostersCommand = async ({ command, say, ack }) => {
         
         await threadedSay(footer);
         
-        console.log(`[CHECK_ROSTERS] ==> ROSTER ANALYSIS COMPLETED FOR ${leagues.length} LEAGUES (request ${requestId}) <==`);
+        console.log(`[CHECK_ROSTERS] ==> ROSTER ANALYSIS COMPLETED FOR ${leagues.length} LEAGUES <==`);
 
     } catch (error) {
-        console.error(`[CHECK_ROSTERS] Error in processing for request ${requestId}:`, error);
+        console.error('Error in handleCheckRostersCommand:', error);
         await handleCommandError(threadedSay, error, 'checking rosters');
     }
 };

@@ -127,7 +127,7 @@ function analyzeRoster(roster, allPlayers, currentWeek, byeWeeks) {
         if (playerIssues.onBye) {
             issues.startingByeWeekPlayers.push({
                 playerId,
-                name: `${player.first_name} ${player.last_name}`,
+                name: player.full_name || `${player.first_name || ''} ${player.last_name || ''}`.trim() || 'Unknown Player',
                 position: player.position,
                 team: player.team,
                 slotIndex: i + 1
@@ -138,7 +138,7 @@ function analyzeRoster(roster, allPlayers, currentWeek, byeWeeks) {
         if (playerIssues.injured) {
             issues.startingInjuredPlayers.push({
                 playerId,
-                name: `${player.first_name} ${player.last_name}`,
+                name: player.full_name || `${player.first_name || ''} ${player.last_name || ''}`.trim() || 'Unknown Player',
                 position: player.position,
                 team: player.team,
                 injuryStatus: playerIssues.injuryStatus,
