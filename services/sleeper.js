@@ -111,6 +111,25 @@ const getLeagueRosters = (leagueId) => {
     return sleeperRequest(`/league/${leagueId}/rosters`);
 };
 
+/**
+ * Get all players data from Sleeper.
+ * See: https://docs.sleeper.com/#players
+ * @param {string} sport The sport (e.g., 'nfl').
+ * @returns {Promise<object>} Object containing all players data.
+ */
+const getAllPlayers = (sport = 'nfl') => {
+    return sleeperRequest(`/players/${sport}`);
+};
+
+/**
+ * Get current NFL state (week, season, etc.).
+ * See: https://docs.sleeper.com/#get-nfl-state
+ * @returns {Promise<object>} Object containing current NFL state.
+ */
+const getNflState = () => {
+    return sleeperRequest('/state/nfl');
+};
+
 module.exports = {
     getDraft,
     getDraftPicks,
@@ -120,4 +139,6 @@ module.exports = {
     getLeague,
     getLeagueUsers,
     getLeagueRosters,
+    getAllPlayers,
+    getNflState,
 };

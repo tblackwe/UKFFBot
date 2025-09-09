@@ -42,6 +42,14 @@ const handleUsageCommand = async ({ say }) => {
                     },
                     {
                         "type": "mrkdwn",
+                        "text": "*`check rosters`*\nAnalyzes starting lineups in all registered leagues for issues like bye weeks, injuries, and empty slots."
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": "*`check league rosters [league_id]`*\nAnalyzes starting lineups in a specific league for issues."
+                    },
+                    {
+                        "type": "mrkdwn",
                         "text": "*`list leagues`*\nShows all Sleeper leagues registered to this channel."
                     }
                 ]
@@ -50,7 +58,7 @@ const handleUsageCommand = async ({ say }) => {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "*Examples:*\n`@UKFFBot help`\n`register draft 987654321`\n`register league 123456789`\n`register player john_doe JohnDoe`\n`list leagues`\n`last pick`"
+                    "text": "*Examples:*\n`@UKFFBot help`\n`register draft 987654321`\n`register league 123456789`\n`register player john_doe JohnDoe`\n`check rosters`\n`list leagues`\n`last pick`"
                 }
             }
         ],

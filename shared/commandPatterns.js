@@ -7,6 +7,7 @@ const { handleUnregisterDraftCommand } = require('../handlers/unregisterDraft.js
 const { handleListDraftsCommand } = require('../handlers/listDrafts.js');
 const { handleListLeaguesCommand } = require('../handlers/listLeagues.js');
 const { handleUpdatePlayersCommand } = require('../handlers/updatePlayers.js');
+const { handleCheckRostersCommand, handleCheckLeagueRostersCommand } = require('../handlers/checkRosters.js');
 
 /**
  * Creates a command payload object for consistency across handlers
@@ -72,6 +73,20 @@ function createCommandPatterns(event, say, client = null) {
       handler: () => {
         const commandPayload = createCommandPayload('', event.channel, event.ts);
         return handleListLeaguesCommand({ command: commandPayload, say });
+      }
+    },
+    { 
+      pattern: /^check\srosters$/i, 
+      handler: () => {
+        const commandPayload = createCommandPayload('', event.channel, event.ts);
+        return handleCheckRostersCommand({ command: commandPayload, say });
+      }
+    },
+    { 
+      pattern: /^check\sleague\srosters(.+)$/i, 
+      handler: (remainingText) => {
+        const commandPayload = createCommandPayload(remainingText, event.channel, event.ts);
+        return handleCheckLeagueRostersCommand({ command: commandPayload, say });
       }
     }
   ];
