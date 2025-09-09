@@ -1,16 +1,18 @@
 const { handleLastPickCommand } = require('../handlers/lastpick.js');
 const { handleRegisterDraftCommand } = require('../handlers/registerDraft.js');
 const { handleRegisterPlayerCommand } = require('../handlers/registerPlayer.js');
+const { handleRegisterLeagueCommand } = require('../handlers/registerLeague.js');
 const { handleUsageCommand } = require('../handlers/handleUsageCommand.js');
 const { handleUnregisterDraftCommand } = require('../handlers/unregisterDraft.js');
 const { handleListDraftsCommand } = require('../handlers/listDrafts.js');
+const { handleListLeaguesCommand } = require('../handlers/listLeagues.js');
 const { handleUpdatePlayersCommand } = require('../handlers/updatePlayers.js');
 
 /**
  * Creates a command payload object for consistency across handlers
  */
-function createCommandPayload(remainingText, channelId) {
-  return { text: remainingText, channel_id: channelId };
+function createCommandPayload(remainingText, channelId, ts = null) {
+  return { text: remainingText, channel_id: channelId, ts: ts };
 }
 
 /**
@@ -30,6 +32,13 @@ function createCommandPatterns(event, say, client = null) {
       handler: (remainingText) => {
         const commandPayload = createCommandPayload(remainingText, event.channel);
         return handleRegisterDraftCommand({ command: commandPayload, say });
+      }
+    },
+    { 
+      pattern: /^register\sleague(.+)$/i, 
+      handler: (remainingText) => {
+        const commandPayload = createCommandPayload(remainingText, event.channel, event.ts);
+        return handleRegisterLeagueCommand({ command: commandPayload, say });
       }
     },
     { 
@@ -57,6 +66,13 @@ function createCommandPatterns(event, say, client = null) {
     { 
       pattern: /^list\sdrafts$/i, 
       handler: () => say("For security, the `list drafts` command can only be used in a direct message with me.")
+    },
+    { 
+      pattern: /^list\sleagues$/i, 
+      handler: () => {
+        const commandPayload = createCommandPayload('', event.channel, event.ts);
+        return handleListLeaguesCommand({ command: commandPayload, say });
+      }
     }
   ];
 }

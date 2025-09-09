@@ -30,11 +30,19 @@ const handleUsageCommand = async ({ say }) => {
                     },
                     {
                         "type": "mrkdwn",
+                        "text": "*`register league [league_id]`*\nRegisters a Sleeper league to this channel for updates and tracking."
+                    },
+                    {
+                        "type": "mrkdwn",
                         "text": "*`register player [sleeper_username] [@slack_user]`*\nRegister a player mapping for Sleeper username to Slack user. Ask Yukon for help if registration looks broken. Awaiting stimhack admin to fix permissions on username lookup."
                     },
                     {
                         "type": "mrkdwn",
                         "text": "*`unregister draft`*\nRemoves the draft registration from this channel."
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": "*`list leagues`*\nShows all Sleeper leagues registered to this channel."
                     }
                 ]
             },
@@ -42,7 +50,7 @@ const handleUsageCommand = async ({ say }) => {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "*Examples:*\n`@UKFFBot help`\n`register draft 987654321`\n`register player john_doe JohnDoe`\n`last pick`"
+                    "text": "*Examples:*\n`@UKFFBot help`\n`register draft 987654321`\n`register league 123456789`\n`register player john_doe JohnDoe`\n`list leagues`\n`last pick`"
                 }
             }
         ],

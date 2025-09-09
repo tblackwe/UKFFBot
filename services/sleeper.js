@@ -81,10 +81,43 @@ const getUserByUsername = (username) => {
     return sleeperRequest(`/user/${username}`);
 };
 
+/**
+ * Get league information by league ID.
+ * See: https://docs.sleeper.com/#get-a-specific-league
+ * @param {string} leagueId The ID of the league to retrieve.
+ * @returns {Promise<object|null>} A league object, or null if not found.
+ */
+const getLeague = (leagueId) => {
+    return sleeperRequest(`/league/${leagueId}`);
+};
+
+/**
+ * Get all users in a league.
+ * See: https://docs.sleeper.com/#get-users-in-a-league
+ * @param {string} leagueId The ID of the league.
+ * @returns {Promise<object[]>} An array of user objects in the league.
+ */
+const getLeagueUsers = (leagueId) => {
+    return sleeperRequest(`/league/${leagueId}/users`);
+};
+
+/**
+ * Get all rosters in a league.
+ * See: https://docs.sleeper.com/#get-rosters-in-a-league
+ * @param {string} leagueId The ID of the league.
+ * @returns {Promise<object[]>} An array of roster objects in the league.
+ */
+const getLeagueRosters = (leagueId) => {
+    return sleeperRequest(`/league/${leagueId}/rosters`);
+};
+
 module.exports = {
     getDraft,
     getDraftPicks,
     getTradedPicks,
     getUserDrafts,
     getUserByUsername,
+    getLeague,
+    getLeagueUsers,
+    getLeagueRosters,
 };

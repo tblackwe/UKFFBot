@@ -328,6 +328,88 @@ async function getAllPlayers() {
     }
 }
 
+/**
+ * Save a league registration to DynamoDB.
+ * @param {string} leagueId The Sleeper league ID.
+ * @param {string} channelId The Slack channel ID.
+ * @param {object} leagueData Additional league data from Sleeper API.
+ * @returns {Promise<void>}
+ * @throws {Error} if the league cannot be saved.
+ */
+async function saveLeague(leagueId, channelId, leagueData) {
+    try {
+        const putCommand = new PutCommand({
+            TableName: TABLE_NAME,
+            Item: {
+                PK: 'LEAGUE',
+                SK: `LEAGUE#${leagueId}`,
+                leagueId: leagueId,
+                slackChannelId: channelId,
+                leagueName: leagueData.name,
+                season: leagueData.season,
+                sport: leagueData.sport,
+                totalRosters: leagueData.total_rosters,
+                status: leagueData.status,
+                registeredAt: new Date().toISOString()
+            }
+        });
+        
+        await docClient.send(putCommand);
+    } catch (error) {
+        console.error("Error saving league to DynamoDB:", error);
+        throw error;
+    }
+}
+
+/**
+ * Get a league by league ID from DynamoDB.
+ * @param {string} leagueId The Sleeper league ID.
+ * @returns {Promise<object|null>} The league object or null if not found.
+ * @throws {Error} if the league cannot be retrieved.
+ */
+async function getLeague(leagueId) {
+    try {
+        const getCommand = new GetCommand({
+            TableName: TABLE_NAME,
+            Key: {
+                PK: 'LEAGUE',
+                SK: `LEAGUE#${leagueId}`
+            }
+        });
+        
+        const response = await docClient.send(getCommand);
+        return response.Item || null;
+    } catch (error) {
+        console.error("Error getting league from DynamoDB:", error);
+        throw error;
+    }
+}
+
+/**
+ * Get leagues by channel ID from DynamoDB.
+ * @param {string} channelId The Slack channel ID.
+ * @returns {Promise<object[]>} Array of league objects registered to the channel.
+ * @throws {Error} if the leagues cannot be retrieved.
+ */
+async function getLeaguesByChannel(channelId) {
+    try {
+        const scanCommand = new ScanCommand({
+            TableName: TABLE_NAME,
+            FilterExpression: 'PK = :pk AND slackChannelId = :channelId',
+            ExpressionAttributeValues: {
+                ':pk': 'LEAGUE',
+                ':channelId': channelId
+            }
+        });
+        
+        const response = await docClient.send(scanCommand);
+        return response.Items || [];
+    } catch (error) {
+        console.error("Error getting leagues by channel from DynamoDB:", error);
+        throw error;
+    }
+}
+
 module.exports = {
     getData,
     saveData,
@@ -337,5 +419,8 @@ module.exports = {
     saveDraft,
     getDraftsByChannel,
     updatePlayerSlackName,
-    getAllPlayers
+    getAllPlayers,
+    saveLeague,
+    getLeague,
+    getLeaguesByChannel
 };

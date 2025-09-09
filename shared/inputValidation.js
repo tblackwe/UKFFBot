@@ -82,8 +82,38 @@ function parseDraftId(text) {
     };
 }
 
+/**
+ * Extracts and validates league ID from command text
+ * @param {string} text - Command text
+ * @returns {object} - Object with isValid, leagueId, and errorMessage
+ */
+function parseLeagueId(text) {
+    const leagueId = text.trim();
+    
+    if (!leagueId) {
+        return {
+            isValid: false,
+            errorMessage: 'Please provide a Sleeper League ID. Usage: `@YourBotName register league [league_id]`'
+        };
+    }
+    
+    // Basic validation - Sleeper league IDs are typically numeric
+    if (!/^[0-9]+$/.test(leagueId)) {
+        return {
+            isValid: false,
+            errorMessage: 'League ID should be numeric. Please check the ID and try again.'
+        };
+    }
+    
+    return {
+        isValid: true,
+        leagueId: leagueId
+    };
+}
+
 module.exports = {
     parseSlackUserInput,
     validateCommandArgs,
-    parseDraftId
+    parseDraftId,
+    parseLeagueId
 };
