@@ -17,7 +17,8 @@ const TABLE_NAME = process.env.DYNAMODB_TABLE_NAME || 'UKFFBot';
  * @param {object} payload.command The command object.
  * @param {function} payload.say The function to send a message.
  */
-const handleUnregisterDraftCommand = async ({ command, say }) => {
+const handleUnregisterDraftCommand = async ({ command, say, ack }) => {
+    if (ack) await ack();
     const channelId = command.channel_id;
 
     try {

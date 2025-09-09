@@ -8,7 +8,8 @@ const { handleCommandError } = require('../shared/messages.js');
  * @param {object} payload.command The command object.
  * @param {function} payload.say The function to send a message.
  */
-const handleListLeaguesCommand = async ({ command, say }) => {
+const handleListLeaguesCommand = async ({ command, say, ack }) => {
+    if (ack) await ack();
     const channelId = command.channel_id;
     const threadTs = command.ts; // Get the timestamp for threading
     

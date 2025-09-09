@@ -1,5 +1,5 @@
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
+const { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, ScanCommand, DeleteCommand } = require('@aws-sdk/lib-dynamodb');
 
 // Initialize DynamoDB client
 const client = new DynamoDBClient({
@@ -474,64 +474,147 @@ async function getNflByeWeeks(season) {
 }
 
 /**
- * Save all NFL players data to DynamoDB cache.
+ * Clean up old NFL players cache chunks.
  * @param {string} sport The sport (e.g., 'nfl').
- * @param {object} players Object containing all players data from Sleeper API.
  * @returns {Promise<void>}
- * @throws {Error} if the players data cannot be saved.
  */
-async function saveNflPlayers(sport = 'nfl', players) {
+async function cleanupOldNflPlayersCache(sport = 'nfl') {
     try {
+        console.log(`[DATASTORE] Cleaning up old cache entries for ${sport}`);
+        
+        // Query for all items with the players cache prefix
+        const queryCommand = new QueryCommand({
+            TableName: TABLE_NAME,
+            KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+            ExpressionAttributeValues: {
+                ':pk': 'NFL_CACHE',
+                ':sk': `PLAYERS#${sport.toUpperCase()}`
+            }
+        });
+        
+        const response = await docClient.send(queryCommand);
+        
+        if (response.Items && response.Items.length > 0) {
+            console.log(`[DATASTORE] Found ${response.Items.length} old cache items to delete`);
+            
+            // Delete all old cache items
+            const deletePromises = response.Items.map(item => {
+                const deleteCommand = new DeleteCommand({
+                    TableName: TABLE_NAME,
+                    Key: {
+                        PK: item.PK,
+                        SK: item.SK
+                    }
+                });
+                return docClient.send(deleteCommand);
+            });
+            
+            await Promise.all(deletePromises);
+            console.log(`[DATASTORE] Cleaned up ${response.Items.length} old cache items`);
+        }
+    } catch (error) {
+        console.error(`[DATASTORE] Error cleaning up old cache for ${sport}:`, error);
+        // Don't throw here - cleanup failure shouldn't prevent caching
+    }
+}
+
+/**
+ * Save essential NFL players data to DynamoDB cache.
+ * Now stores only essential player data in a single item to avoid chunking complexity.
+ * @param {string} sport The sport (e.g., 'nfl').
+ * @param {object} essentialPlayers Object containing essential players data (not full data).
+ * @returns {Promise<void>}
+ * @throws {Error} if the essential players data cannot be saved.
+ */
+async function saveNflPlayers(sport = 'nfl', essentialPlayers) {
+    try {
+        console.log(`[DATASTORE] Starting to save essential NFL players for ${sport}`);
+        
+        const playerCount = Object.keys(essentialPlayers).length;
+        console.log(`[DATASTORE] Essential players to save: ${playerCount}`);
+        
+        // Calculate estimated size for logging
+        const estimatedSize = JSON.stringify(essentialPlayers).length;
+        console.log(`[DATASTORE] Estimated essential data size: ${Math.round(estimatedSize / 1024)}KB`);
+        
+        if (estimatedSize > 350 * 1024) { // 350KB threshold to stay well under 400KB limit
+            console.warn(`[DATASTORE] Essential data size (${Math.round(estimatedSize / 1024)}KB) is close to DynamoDB item limit`);
+        }
+        
+        // Clean up old cache entries first
+        await cleanupOldNflPlayersCache(sport);
+        
+        // Save essential data in a single item
         const putCommand = new PutCommand({
             TableName: TABLE_NAME,
             Item: {
                 PK: 'NFL_CACHE',
-                SK: `PLAYERS#${sport.toUpperCase()}`,
+                SK: `PLAYERS#${sport.toUpperCase()}#ESSENTIAL`,
                 sport: sport,
-                players: players,
+                dataType: 'essential',
+                playerCount: playerCount,
+                players: essentialPlayers,
                 cachedAt: new Date().toISOString(),
                 // Cache expires after 24 hours (player data changes daily)
                 expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
             }
         });
         
+        console.log(`[DATASTORE] Saving essential players data for ${sport}...`);
+        const startTime = Date.now();
         await docClient.send(putCommand);
+        const saveTime = Date.now() - startTime;
+        
+        console.log(`[DATASTORE] Successfully saved essential NFL players for ${sport} (${playerCount} players) in ${saveTime}ms`);
     } catch (error) {
-        console.error("Error saving NFL players to DynamoDB:", error);
+        console.error(`[DATASTORE] Error saving essential NFL players for ${sport}:`, error);
+        if (error.name === 'ValidationException' && error.message.includes('Item size')) {
+            console.error(`[DATASTORE] Essential data too large for single DynamoDB item. Consider further reducing data.`);
+        }
         throw error;
     }
 }
 
 /**
- * Get all NFL players data from DynamoDB cache.
+ * Get essential NFL players data from DynamoDB cache.
+ * Now handles simplified single-item storage instead of chunks.
  * @param {string} sport The sport (e.g., 'nfl').
- * @returns {Promise<object|null>} The players object or null if not found/expired.
+ * @returns {Promise<object|null>} The essential players object or null if not found/expired.
  * @throws {Error} if the players data cannot be retrieved.
  */
 async function getNflPlayers(sport = 'nfl') {
     try {
-        const getCommand = new GetCommand({
+        console.log(`[DATASTORE] Getting essential NFL players for ${sport} from cache`);
+        
+        // Get the essential players data
+        const command = new GetCommand({
             TableName: TABLE_NAME,
             Key: {
                 PK: 'NFL_CACHE',
-                SK: `PLAYERS#${sport.toUpperCase()}`
+                SK: `PLAYERS#${sport.toUpperCase()}#ESSENTIAL`
             }
         });
         
-        const response = await docClient.send(getCommand);
+        const response = await docClient.send(command);
         if (!response.Item) {
+            console.log(`[DATASTORE] No essential players cache found for ${sport}`);
             return null;
         }
         
         // Check if cache has expired
         const expiresAt = new Date(response.Item.expiresAt);
         if (expiresAt < new Date()) {
+            console.log(`[DATASTORE] Cache expired for ${sport} essential players`);
             return null;
         }
         
-        return response.Item.players;
+        const { players, playerCount, cachedAt } = response.Item;
+        console.log(`[DATASTORE] Successfully loaded ${playerCount} essential players (cached ${cachedAt})`);
+        
+        return players;
     } catch (error) {
-        console.error("Error getting NFL players from DynamoDB:", error);
+        console.error("[DATASTORE] Error getting essential NFL players from DynamoDB:", error);
+        console.error("[DATASTORE] Error stack:", error.stack);
         throw error;
     }
 }

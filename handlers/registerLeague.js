@@ -10,7 +10,8 @@ const { parseLeagueId } = require('../shared/inputValidation.js');
  * @param {object} payload.command The command object.
  * @param {function} payload.say The function to send a message.
  */
-const handleRegisterLeagueCommand = async ({ command, say }) => {
+const handleRegisterLeagueCommand = async ({ command, say, ack }) => {
+    if (ack) await ack();
     const channelId = command.channel_id;
     const threadTs = command.ts; // Get the timestamp for threading
     

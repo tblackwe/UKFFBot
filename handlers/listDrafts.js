@@ -8,7 +8,8 @@ const { handleCommandError } = require('../shared/messages.js');
  * @param {object} payload The payload from the Slack command.
  * @param {function} payload.say The function to send a message.
  */
-const handleListDraftsCommand = async ({ say }) => {
+const handleListDraftsCommand = async ({ say, ack }) => {
+    if (ack) await ack();
     try {
         const data = await getData();
         const drafts = data.drafts || {};

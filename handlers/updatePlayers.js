@@ -9,7 +9,8 @@ const datastore = require('../services/datastore.js');
  * @param {object} payload.say The function to send a message.
  * @param {object} payload.client The Slack Web API client.
  */
-const handleUpdatePlayersCommand = async ({ say, client }) => {
+const handleUpdatePlayersCommand = async ({ say, client, ack }) => {
+    if (ack) await ack();
     try {
         await say('🔄 Updating player slack names...');
         

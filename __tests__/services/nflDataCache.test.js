@@ -102,7 +102,29 @@ describe('NFL Data Cache Service', () => {
             expect(result).toEqual(mockPlayers);
             expect(mockDatastore.getNflPlayers).toHaveBeenCalledWith('nfl');
             expect(mockSleeper.getAllPlayers).toHaveBeenCalledWith('nfl');
-            expect(mockDatastore.saveNflPlayers).toHaveBeenCalledWith('nfl', mockPlayers);
+            
+            // Should save essential data, not full mockPlayers
+            const expectedEssentialData = {
+                '123': {
+                    player_id: '123',
+                    full_name: 'Test Player',
+                    team: null,
+                    fantasy_positions: ['QB'],
+                    injury_status: null,
+                    active: true,
+                    position: 'QB'
+                },
+                '456': {
+                    player_id: '456',
+                    full_name: 'Another Player',
+                    team: null,
+                    fantasy_positions: ['RB'],
+                    injury_status: null,
+                    active: true,
+                    position: 'RB'
+                }
+            };
+            expect(mockDatastore.saveNflPlayers).toHaveBeenCalledWith('nfl', expectedEssentialData);
         });
 
         it('should throw error if API fails', async () => {
@@ -133,7 +155,20 @@ describe('NFL Data Cache Service', () => {
 
             expect(result).toEqual(mockPlayers);
             expect(mockSleeper.getAllPlayers).toHaveBeenCalledWith('nfl');
-            expect(mockDatastore.saveNflPlayers).toHaveBeenCalledWith('nfl', mockPlayers);
+            
+            // Should save essential data, not full mockPlayers
+            const expectedEssentialData = {
+                '123': {
+                    player_id: '123',
+                    full_name: 'Test Player',
+                    team: null,
+                    fantasy_positions: ['UNKNOWN'],
+                    injury_status: null,
+                    active: true,
+                    position: 'UNKNOWN'
+                }
+            };
+            expect(mockDatastore.saveNflPlayers).toHaveBeenCalledWith('nfl', expectedEssentialData);
         });
 
         it('should throw error if API fails', async () => {

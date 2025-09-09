@@ -4,7 +4,8 @@
  * @param {object} payload The payload from the Slack command.
  * @param {function} payload.say The function to send a message.
  */
-const handleUsageCommand = async ({ say }) => {
+const handleUsageCommand = async ({ say, ack }) => {
+    if (ack) await ack();
     const usageMessage = {
         blocks: [
             {

@@ -9,12 +9,21 @@ const { handleCommandError } = require('../shared/messages.js');
  * @param {object} payload.command The command object.
  * @param {function} payload.say The function to send a message.
  */
-const handleCheckRostersCommand = async ({ command, say }) => {
+const handleCheckRostersCommand = async ({ command, say, ack }) => {
+    const requestId = `check-rosters-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    console.log(`[CHECK_ROSTERS] Starting request ${requestId} for channel ${command.channel_id}`);
+    
+    if (ack) {
+        console.log(`[CHECK_ROSTERS] Acknowledging request ${requestId}`);
+        await ack();
+    }
+    
     const channelId = command.channel_id;
     const threadTs = command.ts; // Get the timestamp for threading
     
     // Create a threaded say function if we have a timestamp
     const threadedSay = async (message) => {
+        console.log(`[CHECK_ROSTERS] Sending message for request ${requestId}: ${typeof message === 'string' ? message.substring(0, 50) : 'object'}...`);
         if (threadTs) {
             return say({ text: message, thread_ts: threadTs });
         } else {
@@ -23,20 +32,29 @@ const handleCheckRostersCommand = async ({ command, say }) => {
     };
 
     try {
+        console.log(`[CHECK_ROSTERS] Getting leagues for channel ${channelId} (request ${requestId})`);
         // Get leagues registered to this channel
         const leagues = await getLeaguesByChannel(channelId);
         
         if (leagues.length === 0) {
+            console.log(`[CHECK_ROSTERS] No leagues found for request ${requestId}`);
             await threadedSay('📭 No leagues are registered to this channel.\n\nUse `@UKFFBot register league [league_id]` first to register a Sleeper league.');
             return;
         }
 
+        console.log(`[CHECK_ROSTERS] Found ${leagues.length} leagues for request ${requestId}, sending initial message`);
         // Show initial message
         await threadedSay('🔍 Analyzing rosters for issues... This may take a moment.');
 
+        // Process leagues synchronously but with a small delay to allow the initial message to be sent
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        console.log(`[CHECK_ROSTERS] Starting roster analysis for request ${requestId}`);
+        
         // Analyze each league
         for (const league of leagues) {
             try {
+                console.log(`[CHECK_ROSTERS] Analyzing league ${league.leagueId} for request ${requestId}`);
                 const analysis = await analyzeLeagueRosters(league.leagueId);
                 const message = formatAnalysisMessage(analysis);
                 
@@ -44,8 +62,10 @@ const handleCheckRostersCommand = async ({ command, say }) => {
                 const leagueHeader = `\n**${league.leagueName}** (${league.season})\n${'-'.repeat(40)}`;
                 await threadedSay(leagueHeader + '\n' + message);
                 
+                console.log(`[CHECK_ROSTERS] Completed analysis for league ${league.leagueId} (request ${requestId})`);
+                
             } catch (error) {
-                console.error(`Error analyzing league ${league.leagueId}:`, error);
+                console.error(`[CHECK_ROSTERS] Error analyzing league ${league.leagueId} for request ${requestId}:`, error);
                 await threadedSay(`❌ Failed to analyze league "${league.leagueName}": ${error.message}`);
             }
         }
@@ -61,9 +81,11 @@ const handleCheckRostersCommand = async ({ command, say }) => {
         ].join('\n');
         
         await threadedSay(footer);
+        
+        console.log(`[CHECK_ROSTERS] ==> ROSTER ANALYSIS COMPLETED FOR ${leagues.length} LEAGUES (request ${requestId}) <==`);
 
     } catch (error) {
-        console.error('Error in handleCheckRostersCommand:', error);
+        console.error(`[CHECK_ROSTERS] Error in processing for request ${requestId}:`, error);
         await handleCommandError(threadedSay, error, 'checking rosters');
     }
 };
@@ -74,7 +96,8 @@ const handleCheckRostersCommand = async ({ command, say }) => {
  * @param {object} payload.command The command object.
  * @param {function} payload.say The function to send a message.
  */
-const handleCheckLeagueRostersCommand = async ({ command, say }) => {
+const handleCheckLeagueRostersCommand = async ({ command, say, ack }) => {
+    if (ack) await ack();
     const channelId = command.channel_id;
     const threadTs = command.ts;
     const leagueId = command.text.trim();

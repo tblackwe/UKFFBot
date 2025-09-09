@@ -21,44 +21,45 @@ function createCommandPayload(remainingText, channelId, ts = null) {
  * Creates the command patterns array for consistent command routing
  */
 function createCommandPatterns(event, say, client = null) {
+  const ack = async () => {};
   return [
     { 
       pattern: /^(last\s+pick|latest)$/i, 
       handler: (remainingText) => {
         const commandPayload = createCommandPayload(remainingText, event.channel);
-        return handleLastPickCommand({ command: commandPayload, say });
+        return handleLastPickCommand({ command: commandPayload, say, ack });
       }
     },
     { 
       pattern: /^register\sdraft(.+)$/i, 
       handler: (remainingText) => {
         const commandPayload = createCommandPayload(remainingText, event.channel);
-        return handleRegisterDraftCommand({ command: commandPayload, say });
+        return handleRegisterDraftCommand({ command: commandPayload, say, ack });
       }
     },
     { 
       pattern: /^register\sleague(.+)$/i, 
       handler: (remainingText) => {
         const commandPayload = createCommandPayload(remainingText, event.channel, event.ts);
-        return handleRegisterLeagueCommand({ command: commandPayload, say });
+        return handleRegisterLeagueCommand({ command: commandPayload, say, ack });
       }
     },
     { 
       pattern: /^register\splayer(.+)$/i, 
       handler: (remainingText) => {
         const commandPayload = createCommandPayload(remainingText, event.channel);
-        return handleRegisterPlayerCommand({ command: commandPayload, say, client });
+        return handleRegisterPlayerCommand({ command: commandPayload, say, client, ack });
       }
     },
     { 
       pattern: /^(usage|help)$/i, 
-      handler: () => handleUsageCommand({ say })
+      handler: () => handleUsageCommand({ say, ack })
     },
     { 
       pattern: /^unregister\sdraft(.+)$/i, 
       handler: (remainingText) => {
         const commandPayload = createCommandPayload(remainingText, event.channel);
-        return handleUnregisterDraftCommand({ command: commandPayload, say });
+        return handleUnregisterDraftCommand({ command: commandPayload, say, ack });
       }
     },
     { 
@@ -73,28 +74,28 @@ function createCommandPatterns(event, say, client = null) {
       pattern: /^list\sleagues$/i, 
       handler: () => {
         const commandPayload = createCommandPayload('', event.channel, event.ts);
-        return handleListLeaguesCommand({ command: commandPayload, say });
+        return handleListLeaguesCommand({ command: commandPayload, say, ack });
       }
     },
     { 
       pattern: /^check\srosters$/i, 
       handler: () => {
         const commandPayload = createCommandPayload('', event.channel, event.ts);
-        return handleCheckRostersCommand({ command: commandPayload, say });
+        return handleCheckRostersCommand({ command: commandPayload, say, ack });
       }
     },
     { 
       pattern: /^check\sleague\srosters(.+)$/i, 
       handler: (remainingText) => {
         const commandPayload = createCommandPayload(remainingText, event.channel, event.ts);
-        return handleCheckLeagueRostersCommand({ command: commandPayload, say });
+        return handleCheckLeagueRostersCommand({ command: commandPayload, say, ack });
       }
     },
     { 
       pattern: /^cache\sstatus$/i, 
       handler: () => {
         const params = { 
-          ack: async () => {},
+          ack,
           respond: say,
           command: createCommandPayload('', event.channel),
           client
@@ -106,7 +107,7 @@ function createCommandPatterns(event, say, client = null) {
       pattern: /^cache\srefresh$/i, 
       handler: () => {
         const params = { 
-          ack: async () => {},
+          ack,
           respond: say,
           command: createCommandPayload('', event.channel),
           client
@@ -121,9 +122,16 @@ function createCommandPatterns(event, say, client = null) {
  * Processes app_mention events with consistent command routing
  */
 async function handleAppMention({ event, say, logger, client }) {
+  const eventId = event.event_id || event.ts;
+  const eventTime = new Date(event.event_time ? event.event_time * 1000 : Date.now()).toISOString();
+  
+  console.log(`[APP_MENTION] Processing event ${eventId} at ${eventTime}: "${event.text}"`);
+  
   try {
     // Remove the bot mention from the message text and trim whitespace
     const text = event.text.replace(/<@.*?>\s*/, '').trim();
+
+    console.log(`[APP_MENTION] Command text: "${text}"`);
 
     // If no text after mention, show help
     if (!text) {
@@ -143,12 +151,15 @@ async function handleAppMention({ event, say, logger, client }) {
         matchedCommand = { handler };
         // Extract remaining text after the command
         remainingText = match[1] ? match[1].trim() : '';
+        console.log(`[APP_MENTION] Matched command pattern for event ${eventId}`);
         break;
       }
     }
     
     if (matchedCommand) {
+      console.log(`[APP_MENTION] Executing handler for event ${eventId}`);
       await matchedCommand.handler(remainingText);
+      console.log(`[APP_MENTION] Handler completed for event ${eventId}`);
     } else {
       // Extract first word/phrase for error message
       const firstWord = text.split(/\s+/)[0] || text;
@@ -156,6 +167,7 @@ async function handleAppMention({ event, say, logger, client }) {
       await handleUsageCommand({ say });
     }
   } catch (error) {
+    console.error(`[APP_MENTION] Error processing event ${eventId}:`, error);
     logger.error("Error processing app_mention:", error);
     await say('An error occurred while processing your request.');
   }
@@ -165,14 +177,20 @@ async function handleAppMention({ event, say, logger, client }) {
  * Handles direct message events consistently
  */
 async function handleDirectMessage({ message, say, logger, client }) {
+  console.log(`[DIRECT_MESSAGE] Processing DM from user ${message.user}: "${message.text}"`);
+  
   // Only respond to direct messages or if bot is mentioned
   if (message.channel_type === 'im') {
     if (/list\s+drafts/i.test(message.text)) {
+      console.log(`[DIRECT_MESSAGE] Handling list drafts command`);
       const commandPayload = createCommandPayload('', message.channel);
-      await handleListDraftsCommand({ command: commandPayload, say });
+      await handleListDraftsCommand({ command: commandPayload, say, ack: async () => {} });
     } else if (/update\s+players/i.test(message.text)) {
-      await handleUpdatePlayersCommand({ say, client });
+      console.log(`[DIRECT_MESSAGE] Handling update players command`);
+      await handleUpdatePlayersCommand({ say, client, ack: async () => {} });
     }
+  } else {
+    console.log(`[DIRECT_MESSAGE] Ignoring non-DM message in channel ${message.channel}`);
   }
 }
 
