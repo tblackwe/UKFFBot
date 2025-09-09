@@ -8,6 +8,7 @@ const { handleListDraftsCommand } = require('../handlers/listDrafts.js');
 const { handleListLeaguesCommand } = require('../handlers/listLeagues.js');
 const { handleUpdatePlayersCommand } = require('../handlers/updatePlayers.js');
 const { handleCheckRostersCommand, handleCheckLeagueRostersCommand } = require('../handlers/checkRosters.js');
+const { handleCacheStatusCommand, handleCacheRefreshCommand } = require('../handlers/cacheManagement.js');
 
 /**
  * Creates a command payload object for consistency across handlers
@@ -87,6 +88,30 @@ function createCommandPatterns(event, say, client = null) {
       handler: (remainingText) => {
         const commandPayload = createCommandPayload(remainingText, event.channel, event.ts);
         return handleCheckLeagueRostersCommand({ command: commandPayload, say });
+      }
+    },
+    { 
+      pattern: /^cache\sstatus$/i, 
+      handler: () => {
+        const params = { 
+          ack: async () => {},
+          respond: say,
+          command: createCommandPayload('', event.channel),
+          client
+        };
+        return handleCacheStatusCommand(params);
+      }
+    },
+    { 
+      pattern: /^cache\srefresh$/i, 
+      handler: () => {
+        const params = { 
+          ack: async () => {},
+          respond: say,
+          command: createCommandPayload('', event.channel),
+          client
+        };
+        return handleCacheRefreshCommand(params);
       }
     }
   ];

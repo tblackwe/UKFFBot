@@ -410,6 +410,132 @@ async function getLeaguesByChannel(channelId) {
     }
 }
 
+/**
+ * Save NFL bye weeks data to DynamoDB cache.
+ * @param {number} season The NFL season year (e.g., 2025).
+ * @param {object} byeWeeks Object mapping team abbreviations to bye week numbers.
+ * @returns {Promise<void>}
+ * @throws {Error} if the bye weeks cannot be saved.
+ */
+async function saveNflByeWeeks(season, byeWeeks) {
+    try {
+        const putCommand = new PutCommand({
+            TableName: TABLE_NAME,
+            Item: {
+                PK: 'NFL_CACHE',
+                SK: `BYE_WEEKS#${season}`,
+                season: season,
+                byeWeeks: byeWeeks,
+                cachedAt: new Date().toISOString(),
+                // Cache expires after 1 year (season ends)
+                expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+            }
+        });
+        
+        await docClient.send(putCommand);
+    } catch (error) {
+        console.error("Error saving NFL bye weeks to DynamoDB:", error);
+        throw error;
+    }
+}
+
+/**
+ * Get NFL bye weeks data from DynamoDB cache.
+ * @param {number} season The NFL season year (e.g., 2025).
+ * @returns {Promise<object|null>} The bye weeks object or null if not found/expired.
+ * @throws {Error} if the bye weeks cannot be retrieved.
+ */
+async function getNflByeWeeks(season) {
+    try {
+        const getCommand = new GetCommand({
+            TableName: TABLE_NAME,
+            Key: {
+                PK: 'NFL_CACHE',
+                SK: `BYE_WEEKS#${season}`
+            }
+        });
+        
+        const response = await docClient.send(getCommand);
+        if (!response.Item) {
+            return null;
+        }
+        
+        // Check if cache has expired
+        const expiresAt = new Date(response.Item.expiresAt);
+        if (expiresAt < new Date()) {
+            return null;
+        }
+        
+        return response.Item.byeWeeks;
+    } catch (error) {
+        console.error("Error getting NFL bye weeks from DynamoDB:", error);
+        throw error;
+    }
+}
+
+/**
+ * Save all NFL players data to DynamoDB cache.
+ * @param {string} sport The sport (e.g., 'nfl').
+ * @param {object} players Object containing all players data from Sleeper API.
+ * @returns {Promise<void>}
+ * @throws {Error} if the players data cannot be saved.
+ */
+async function saveNflPlayers(sport = 'nfl', players) {
+    try {
+        const putCommand = new PutCommand({
+            TableName: TABLE_NAME,
+            Item: {
+                PK: 'NFL_CACHE',
+                SK: `PLAYERS#${sport.toUpperCase()}`,
+                sport: sport,
+                players: players,
+                cachedAt: new Date().toISOString(),
+                // Cache expires after 24 hours (player data changes daily)
+                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+            }
+        });
+        
+        await docClient.send(putCommand);
+    } catch (error) {
+        console.error("Error saving NFL players to DynamoDB:", error);
+        throw error;
+    }
+}
+
+/**
+ * Get all NFL players data from DynamoDB cache.
+ * @param {string} sport The sport (e.g., 'nfl').
+ * @returns {Promise<object|null>} The players object or null if not found/expired.
+ * @throws {Error} if the players data cannot be retrieved.
+ */
+async function getNflPlayers(sport = 'nfl') {
+    try {
+        const getCommand = new GetCommand({
+            TableName: TABLE_NAME,
+            Key: {
+                PK: 'NFL_CACHE',
+                SK: `PLAYERS#${sport.toUpperCase()}`
+            }
+        });
+        
+        const response = await docClient.send(getCommand);
+        if (!response.Item) {
+            return null;
+        }
+        
+        // Check if cache has expired
+        const expiresAt = new Date(response.Item.expiresAt);
+        if (expiresAt < new Date()) {
+            return null;
+        }
+        
+        return response.Item.players;
+    } catch (error) {
+        console.error("Error getting NFL players from DynamoDB:", error);
+        throw error;
+    }
+}
+
 module.exports = {
     getData,
     saveData,
@@ -422,5 +548,9 @@ module.exports = {
     getAllPlayers,
     saveLeague,
     getLeague,
-    getLeaguesByChannel
+    getLeaguesByChannel,
+    saveNflByeWeeks,
+    getNflByeWeeks,
+    saveNflPlayers,
+    getNflPlayers
 };

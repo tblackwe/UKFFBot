@@ -1,27 +1,5 @@
-const { getLeagueRosters, getLeagueUsers, getAllPlayers, getNflState } = require('./sleeper.js');
-
-/**
- * NFL teams and their bye weeks for 2025 season
- * This should be updated each season
- */
-const NFL_BYE_WEEKS_2025 = {
-    // Week 5 byes
-    'DET': 5, 'LAC': 5, 'PHI': 5, 'TEN': 5,
-    // Week 6 byes  
-    'KC': 6, 'LAR': 6, 'MIA': 6, 'MIN': 6,
-    // Week 7 byes
-    'CHI': 7, 'DAL': 7,
-    // Week 9 byes
-    'CLE': 9, 'GB': 9, 'LV': 9, 'SEA': 9,
-    // Week 10 byes
-    'ATL': 10, 'DEN': 10, 'IND': 10, 'NE': 10,
-    // Week 11 byes
-    'BAL': 11, 'HOU': 11, 'WAS': 11, 'NYJ': 11,
-    // Week 12 byes
-    'ARI': 12, 'CAR': 12, 'NYG': 12, 'TB': 12,
-    // Week 14 byes
-    'BUF': 14, 'CIN': 14, 'JAX': 14, 'NO': 14, 'PIT': 14, 'SF': 14
-};
+const { getLeagueRosters, getLeagueUsers, getNflState } = require('./sleeper.js');
+const { getNflByeWeeksWithCache, getAllPlayersWithCache } = require('./nflDataCache.js');
 
 /**
  * Position mappings for fantasy relevance
@@ -53,11 +31,12 @@ async function analyzeLeagueRosters(leagueId) {
         const currentWeek = nflState.display_week || nflState.week;
         const currentSeason = nflState.season;
 
-        // Get league data
-        const [rosters, users, allPlayers] = await Promise.all([
+        // Get league data and cached NFL data in parallel
+        const [rosters, users, allPlayers, byeWeeks] = await Promise.all([
             getLeagueRosters(leagueId),
             getLeagueUsers(leagueId),
-            getAllPlayers('nfl')
+            getAllPlayersWithCache('nfl'),
+            getNflByeWeeksWithCache(currentSeason)
         ]);
 
         // Create user lookup map
@@ -71,7 +50,7 @@ async function analyzeLeagueRosters(leagueId) {
         // Analyze each roster
         for (const roster of rosters) {
             const owner = userMap[roster.owner_id];
-            const rosterIssues = analyzeRoster(roster, allPlayers, currentWeek);
+            const rosterIssues = analyzeRoster(roster, allPlayers, currentWeek, byeWeeks);
             
             if (rosterIssues.hasIssues) {
                 rosterAnalysis.push({
@@ -104,9 +83,10 @@ async function analyzeLeagueRosters(leagueId) {
  * @param {object} roster The roster object from Sleeper
  * @param {object} allPlayers All players data from Sleeper
  * @param {number} currentWeek Current NFL week
+ * @param {object} byeWeeks NFL bye weeks mapping for current season
  * @returns {object} Analysis of roster issues
  */
-function analyzeRoster(roster, allPlayers, currentWeek) {
+function analyzeRoster(roster, allPlayers, currentWeek, byeWeeks) {
     const issues = {
         startingByeWeekPlayers: [],
         startingInjuredPlayers: [],
@@ -141,7 +121,7 @@ function analyzeRoster(roster, allPlayers, currentWeek) {
             continue;
         }
 
-        const playerIssues = analyzePlayer(player, currentWeek);
+        const playerIssues = analyzePlayer(player, currentWeek, byeWeeks);
 
         // Check for bye week (only starting players)
         if (playerIssues.onBye) {
@@ -191,17 +171,18 @@ function getPositionForSlot(slotIndex) {
  * Analyzes a single player for issues
  * @param {object} player Player data from Sleeper
  * @param {number} currentWeek Current NFL week
+ * @param {object} byeWeeks NFL bye weeks mapping for current season
  * @returns {object} Player analysis
  */
-function analyzePlayer(player, currentWeek) {
+function analyzePlayer(player, currentWeek, byeWeeks) {
     const analysis = {
         onBye: false,
         injured: false,
         injuryStatus: null
     };
 
-    // Check if player is on bye week
-    if (player.team && NFL_BYE_WEEKS_2025[player.team] === currentWeek) {
+    // Check if player is on bye week using cached bye weeks data
+    if (player.team && byeWeeks[player.team] === currentWeek) {
         analysis.onBye = true;
     }
 
@@ -266,6 +247,5 @@ module.exports = {
     analyzeRoster,
     analyzePlayer,
     formatAnalysisMessage,
-    getPositionForSlot,
-    NFL_BYE_WEEKS_2025
+    getPositionForSlot
 };

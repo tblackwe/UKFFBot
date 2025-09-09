@@ -1,4 +1,5 @@
-const { analyzePlayer, analyzeRoster, formatAnalysisMessage, getPositionForSlot, NFL_BYE_WEEKS_2025 } = require('../../services/rosterAnalyzer');
+const { analyzePlayer, analyzeRoster, formatAnalysisMessage, getPositionForSlot } = require('../../services/rosterAnalyzer');
+const { NFL_BYE_WEEKS_2025 } = require('../../services/nflDataCache');
 
 describe('rosterAnalyzer', () => {
     describe('analyzePlayer', () => {
@@ -11,7 +12,7 @@ describe('rosterAnalyzer', () => {
                 injury_status: 'Healthy'
             };
 
-            const result = analyzePlayer(player, 5); // Week 5
+            const result = analyzePlayer(player, 5, NFL_BYE_WEEKS_2025); // Week 5
 
             expect(result.onBye).toBe(true);
             expect(result.injured).toBe(false);
@@ -26,7 +27,7 @@ describe('rosterAnalyzer', () => {
                 injury_status: 'Out'
             };
 
-            const result = analyzePlayer(player, 1);
+            const result = analyzePlayer(player, 1, NFL_BYE_WEEKS_2025);
 
             expect(result.onBye).toBe(false);
             expect(result.injured).toBe(true);
@@ -42,7 +43,7 @@ describe('rosterAnalyzer', () => {
                 injury_status: 'Questionable'
             };
 
-            const result = analyzePlayer(player, 1);
+            const result = analyzePlayer(player, 1, NFL_BYE_WEEKS_2025);
 
             expect(result.onBye).toBe(false);
             expect(result.injured).toBe(false);
@@ -58,7 +59,7 @@ describe('rosterAnalyzer', () => {
                 injury_status: 'Healthy'
             };
 
-            const result = analyzePlayer(player, 1); // KC bye is week 6
+            const result = analyzePlayer(player, 1, NFL_BYE_WEEKS_2025); // Week 1, KC bye is week 6
 
             expect(result.onBye).toBe(false);
             expect(result.injured).toBe(false);
@@ -66,99 +67,65 @@ describe('rosterAnalyzer', () => {
     });
 
     describe('analyzeRoster', () => {
+        const mockPlayers = {
+            'player1': {
+                first_name: 'Test',
+                last_name: 'Player1',
+                position: 'QB',
+                team: 'DET', // bye week 5
+                injury_status: 'Healthy'
+            },
+            'player2': {
+                first_name: 'Test',
+                last_name: 'Player2',
+                position: 'RB',
+                team: 'KC', // bye week 6
+                injury_status: 'Out'
+            },
+            'player3': {
+                first_name: 'Bench',
+                last_name: 'Player',
+                position: 'WR',
+                team: 'DET', // bye week 5 but on bench
+                injury_status: 'Healthy'
+            }
+        };
+
         test('should detect starting bye week players as critical issue', () => {
             const roster = {
-                roster_id: 1,
-                owner_id: 'user1',
-                starters: ['player1', 'player2'],
+                starters: ['player1', 'player2'], // player1 is on bye
                 players: ['player1', 'player2', 'player3']
             };
 
-            const allPlayers = {
-                'player1': {
-                    first_name: 'Bye',
-                    last_name: 'Player',
-                    position: 'QB',
-                    team: 'DET', // Week 5 bye
-                    injury_status: 'Healthy'
-                },
-                'player2': {
-                    first_name: 'Good',
-                    last_name: 'Player',
-                    position: 'RB',
-                    team: 'KC', // Week 6 bye
-                    injury_status: 'Healthy'
-                },
-                'player3': {
-                    first_name: 'Bench',
-                    last_name: 'Player',
-                    position: 'WR',
-                    team: 'PHI', // Week 5 bye
-                    injury_status: 'Healthy'
-                }
-            };
-
-            const result = analyzeRoster(roster, allPlayers, 5);
+            const result = analyzeRoster(roster, mockPlayers, 5, NFL_BYE_WEEKS_2025); // Week 5
 
             expect(result.hasIssues).toBe(true);
             expect(result.startingByeWeekPlayers).toHaveLength(1);
-            expect(result.startingByeWeekPlayers[0].name).toBe('Bye Player');
-            // Bench players should not be included
-            expect(result.startingByeWeekPlayers.every(p => p.slotIndex)).toBe(true);
+            expect(result.startingByeWeekPlayers[0].name).toBe('Test Player1');
+            expect(result.startingByeWeekPlayers[0].team).toBe('DET');
         });
 
         test('should detect starting injured players as critical issue', () => {
             const roster = {
-                roster_id: 1,
-                owner_id: 'user1',
-                starters: ['player1', 'player2'],
-                players: ['player1', 'player2']
+                starters: ['player1', 'player2'], // player2 is injured
+                players: ['player1', 'player2', 'player3']
             };
 
-            const allPlayers = {
-                'player1': {
-                    first_name: 'Injured',
-                    last_name: 'Starter',
-                    position: 'QB',
-                    team: 'KC',
-                    injury_status: 'Out'
-                },
-                'player2': {
-                    first_name: 'Healthy',
-                    last_name: 'Player',
-                    position: 'RB',
-                    team: 'KC',
-                    injury_status: 'Healthy'
-                }
-            };
-
-            const result = analyzeRoster(roster, allPlayers, 1);
+            const result = analyzeRoster(roster, mockPlayers, 1, NFL_BYE_WEEKS_2025); // Week 1
 
             expect(result.hasIssues).toBe(true);
             expect(result.startingInjuredPlayers).toHaveLength(1);
+            expect(result.startingInjuredPlayers[0].name).toBe('Test Player2');
             expect(result.startingInjuredPlayers[0].injuryStatus).toBe('OUT');
-            expect(result.startingInjuredPlayers[0].slotIndex).toBe(1);
         });
 
         test('should detect empty starting slots', () => {
             const roster = {
-                roster_id: 1,
-                owner_id: 'user1',
-                starters: ['player1', '0', ''], // Empty slots
+                starters: ['player1', '', '0'], // Two empty slots
                 players: ['player1']
             };
 
-            const allPlayers = {
-                'player1': {
-                    first_name: 'Good',
-                    last_name: 'Player',
-                    position: 'QB',
-                    team: 'KC',
-                    injury_status: 'Healthy'
-                }
-            };
-
-            const result = analyzeRoster(roster, allPlayers, 1);
+            const result = analyzeRoster(roster, mockPlayers, 1, NFL_BYE_WEEKS_2025);
 
             expect(result.hasIssues).toBe(true);
             expect(result.emptyStartingSlots).toHaveLength(2);
@@ -168,41 +135,16 @@ describe('rosterAnalyzer', () => {
 
         test('should not flag bench players', () => {
             const roster = {
-                roster_id: 1,
-                owner_id: 'user1',
-                starters: ['player1'], // Only healthy starter
-                players: ['player1', 'player2', 'player3'] // Injured/bye bench players
+                starters: ['player2'], // Only player2 starting (injured)
+                players: ['player1', 'player2', 'player3'] // player1 and player3 on bench with bye
             };
 
-            const allPlayers = {
-                'player1': {
-                    first_name: 'Healthy',
-                    last_name: 'Starter',
-                    position: 'QB',
-                    team: 'KC',
-                    injury_status: 'Healthy'
-                },
-                'player2': {
-                    first_name: 'Injured',
-                    last_name: 'Bench',
-                    position: 'RB',
-                    team: 'KC',
-                    injury_status: 'Out'
-                },
-                'player3': {
-                    first_name: 'Bye',
-                    last_name: 'Bench',
-                    position: 'WR',
-                    team: 'DET', // Week 5 bye
-                    injury_status: 'Healthy'
-                }
-            };
+            const result = analyzeRoster(roster, mockPlayers, 5, NFL_BYE_WEEKS_2025); // Week 5
 
-            const result = analyzeRoster(roster, allPlayers, 5);
-
-            expect(result.hasIssues).toBe(false);
-            expect(result.startingByeWeekPlayers).toHaveLength(0);
-            expect(result.startingInjuredPlayers).toHaveLength(0);
+            // Should only flag starting injured player, not bench bye week players
+            expect(result.hasIssues).toBe(true);
+            expect(result.startingByeWeekPlayers).toHaveLength(0); // No starting bye players
+            expect(result.startingInjuredPlayers).toHaveLength(1); // One starting injured player
         });
     });
 
@@ -210,52 +152,58 @@ describe('rosterAnalyzer', () => {
         test('should format clean roster message', () => {
             const analysis = {
                 currentWeek: 5,
-                totalRosters: 12,
+                totalRosters: 10,
                 rostersWithIssues: 0,
                 rosterAnalysis: []
             };
 
             const result = formatAnalysisMessage(analysis);
 
-            expect(result).toContain('✅');
-            expect(result).toContain('Week 5');
-            expect(result).toContain('All 12 starting lineups look good');
+            expect(result).toContain('✅ **League Roster Check - Week 5**');
+            expect(result).toContain('All 10 starting lineups look good!');
         });
 
         test('should format roster issues message', () => {
             const analysis = {
                 currentWeek: 5,
-                totalRosters: 12,
-                rostersWithIssues: 1,
-                rosterAnalysis: [{
-                    owner: 'Test Owner',
-                    issues: {
-                        startingByeWeekPlayers: [{
-                            name: 'Bye Player',
-                            position: 'QB',
-                            team: 'DET',
-                            slotIndex: 1
-                        }],
-                        startingInjuredPlayers: [],
-                        emptyStartingSlots: [{
-                            slotIndex: 2,
-                            position: 'RB'
-                        }]
+                totalRosters: 10,
+                rostersWithIssues: 2,
+                rosterAnalysis: [
+                    {
+                        owner: 'Test Owner 1',
+                        issues: {
+                            startingByeWeekPlayers: [
+                                { name: 'Test Player', position: 'QB', team: 'DET' }
+                            ],
+                            startingInjuredPlayers: [],
+                            emptyStartingSlots: []
+                        }
+                    },
+                    {
+                        owner: 'Test Owner 2',
+                        issues: {
+                            startingByeWeekPlayers: [],
+                            startingInjuredPlayers: [
+                                { name: 'Injured Player', position: 'RB', injuryStatus: 'OUT' }
+                            ],
+                            emptyStartingSlots: [
+                                { position: 'WR', issue: 'Empty' }
+                            ]
+                        }
                     }
-                }],
-                analyzedAt: new Date().toISOString()
+                ],
+                analyzedAt: new Date('2025-09-09T12:00:00Z').toISOString()
             };
 
             const result = formatAnalysisMessage(analysis);
 
-            expect(result).toContain('🔍');
-            expect(result).toContain('Starting Lineup Analysis');
-            expect(result).toContain('Week 5');
-            expect(result).toContain('Test Owner');
-            expect(result).toContain('Starting players on BYE');
-            expect(result).toContain('Bye Player (QB, DET)');
-            expect(result).toContain('Empty starting slots');
-            expect(result).toContain('RB (Empty)');
+            expect(result).toContain('🔍 **League Starting Lineup Analysis - Week 5**');
+            expect(result).toContain('Found starting lineup issues with **2** out of **10** rosters');
+            expect(result).toContain('**Test Owner 1:**');
+            expect(result).toContain('⚠️ **Starting players on BYE:** Test Player (QB, DET)');
+            expect(result).toContain('**Test Owner 2:**');
+            expect(result).toContain('🚑 **Starting injured players:** Injured Player (RB, OUT)');
+            expect(result).toContain('❌ **Empty starting slots:** WR (Empty)');
         });
     });
 

@@ -51,6 +51,14 @@ const handleUsageCommand = async ({ say }) => {
                     {
                         "type": "mrkdwn",
                         "text": "*`list leagues`*\nShows all Sleeper leagues registered to this channel."
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": "*`cache status`*\nShows the current status of NFL data caches (players and bye weeks)."
+                    },
+                    {
+                        "type": "mrkdwn",
+                        "text": "*`cache refresh`*\nForce refreshes the NFL data caches with fresh data from Sleeper API."
                     }
                 ]
             },
@@ -58,7 +66,7 @@ const handleUsageCommand = async ({ say }) => {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "*Examples:*\n`@UKFFBot help`\n`register draft 987654321`\n`register league 123456789`\n`register player john_doe JohnDoe`\n`check rosters`\n`list leagues`\n`last pick`"
+                    "text": "*Examples:*\n`@UKFFBot help`\n`register draft 987654321`\n`register league 123456789`\n`register player john_doe JohnDoe`\n`check rosters`\n`list leagues`\n`cache status`\n`last pick`"
                 }
             }
         ],
