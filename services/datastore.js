@@ -411,6 +411,47 @@ async function getLeaguesByChannel(channelId) {
 }
 
 /**
+ * Get all channels that have registered leagues, grouped by channel.
+ * @returns {Promise<object[]>} Array of objects with channelId and leagues array.
+ * @throws {Error} if the data cannot be retrieved.
+ */
+async function getAllChannelsWithLeagues() {
+    try {
+        const scanCommand = new ScanCommand({
+            TableName: TABLE_NAME,
+            FilterExpression: 'PK = :pk',
+            ExpressionAttributeValues: {
+                ':pk': 'LEAGUE'
+            }
+        });
+        
+        const response = await docClient.send(scanCommand);
+        const leagues = response.Items || [];
+        
+        // Group leagues by channel ID
+        const channelMap = new Map();
+        
+        leagues.forEach(league => {
+            const channelId = league.slackChannelId;
+            if (!channelMap.has(channelId)) {
+                channelMap.set(channelId, []);
+            }
+            channelMap.get(channelId).push(league);
+        });
+        
+        // Convert map to array format
+        return Array.from(channelMap.entries()).map(([channelId, leagues]) => ({
+            channelId,
+            leagues
+        }));
+        
+    } catch (error) {
+        console.error("Error getting all channels with leagues from DynamoDB:", error);
+        throw error;
+    }
+}
+
+/**
  * Save NFL bye weeks data to DynamoDB cache.
  * @param {number} season The NFL season year (e.g., 2025).
  * @param {object} byeWeeks Object mapping team abbreviations to bye week numbers.
@@ -632,6 +673,7 @@ module.exports = {
     saveLeague,
     getLeague,
     getLeaguesByChannel,
+    getAllChannelsWithLeagues,
     saveNflByeWeeks,
     getNflByeWeeks,
     saveNflPlayers,
