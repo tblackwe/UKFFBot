@@ -159,8 +159,20 @@ describe('rosterAnalyzer', () => {
 
             const result = formatAnalysisMessage(analysis);
 
-            expect(result).toContain('✅ **League Roster Check - Week 5**');
-            expect(result).toContain('All 10 starting lineups look good!');
+            expect(result).toHaveProperty('text');
+            expect(result).toHaveProperty('blocks');
+            expect(result.text).toContain('All 10 starting lineups look good for Week 5');
+            expect(result.text).toContain('No issues found');
+            expect(result.blocks).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        type: "section",
+                        text: expect.objectContaining({
+                            text: expect.stringContaining("All 10 starting lineups look good!")
+                        })
+                    })
+                ])
+            );
         });
 
         test('should format roster issues message', () => {
@@ -197,13 +209,19 @@ describe('rosterAnalyzer', () => {
 
             const result = formatAnalysisMessage(analysis);
 
-            expect(result).toContain('🔍 **League Starting Lineup Analysis - Week 5**');
-            expect(result).toContain('Found starting lineup issues with **2** out of **10** rosters');
-            expect(result).toContain('**Test Owner 1:**');
-            expect(result).toContain('⚠️ **Starting players on BYE:** Test Player (QB, DET)');
-            expect(result).toContain('**Test Owner 2:**');
-            expect(result).toContain('🚑 **Starting injured players:** Injured Player (RB, OUT)');
-            expect(result).toContain('❌ **Empty starting slots:** WR (Empty)');
+            expect(result).toHaveProperty('text');
+            expect(result).toHaveProperty('blocks');
+            expect(result.text).toContain('Roster Alert - Week 5');
+            expect(result.text).toContain('Found issues with 2 out of 10 rosters');
+            expect(result.text).toContain('Test Owner 1');
+            expect(result.text).toContain('Test Owner 2');
+            expect(result.blocks).toEqual(
+                expect.arrayContaining([
+                    expect.objectContaining({
+                        type: "section"
+                    })
+                ])
+            );
         });
     });
 

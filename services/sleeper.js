@@ -130,6 +130,17 @@ const getNflState = () => {
     return sleeperRequest('/state/nfl');
 };
 
+/**
+ * Get NFL schedule for a specific week and season.
+ * See: https://docs.sleeper.com/#get-nfl-schedule
+ * @param {string} season The season year (e.g., '2025').
+ * @param {number} week The week number.
+ * @returns {Promise<object[]>} Array of game objects for the week.
+ */
+const getNflSchedule = (season, week) => {
+    return sleeperRequest(`/schedule/nfl/regular/${season}/${week}`);
+};
+
 module.exports = {
     getDraft,
     getDraftPicks,
@@ -141,4 +152,5 @@ module.exports = {
     getLeagueRosters,
     getAllPlayers,
     getNflState,
+    getNflSchedule,
 };

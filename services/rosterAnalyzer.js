@@ -1,5 +1,5 @@
 const { getLeagueRosters, getLeagueUsers, getNflState } = require('./sleeper.js');
-const { getNflByeWeeksWithCache, getAllPlayersWithCache } = require('./nflDataCache.js');
+const { getNflByeWeeksWithCache, getAllPlayersWithCache, getNflScheduleWithCache, hasTeamPlayedThisWeek } = require('./nflDataCache.js');
 
 /**
  * Position mappings for fantasy relevance
@@ -32,11 +32,12 @@ async function analyzeLeagueRosters(leagueId) {
         const currentSeason = nflState.season;
 
         // Get league data and cached NFL data in parallel
-        const [rosters, users, allPlayers, byeWeeks] = await Promise.all([
+        const [rosters, users, allPlayers, byeWeeks, weekSchedule] = await Promise.all([
             getLeagueRosters(leagueId),
             getLeagueUsers(leagueId),
             getAllPlayersWithCache('nfl'),
-            getNflByeWeeksWithCache(currentSeason)
+            getNflByeWeeksWithCache(currentSeason),
+            getNflScheduleWithCache(currentSeason, currentWeek)
         ]);
 
         // Create user lookup map
@@ -50,7 +51,7 @@ async function analyzeLeagueRosters(leagueId) {
         // Analyze each roster
         for (const roster of rosters) {
             const owner = userMap[roster.owner_id];
-            const rosterIssues = analyzeRoster(roster, allPlayers, currentWeek, byeWeeks);
+            const rosterIssues = analyzeRoster(roster, allPlayers, currentWeek, byeWeeks, weekSchedule);
             
             if (rosterIssues.hasIssues) {
                 rosterAnalysis.push({
@@ -84,9 +85,10 @@ async function analyzeLeagueRosters(leagueId) {
  * @param {object} allPlayers All players data from Sleeper
  * @param {number} currentWeek Current NFL week
  * @param {object} byeWeeks NFL bye weeks mapping for current season
+ * @param {object[]} weekSchedule Array of game objects for the current week
  * @returns {object} Analysis of roster issues
  */
-function analyzeRoster(roster, allPlayers, currentWeek, byeWeeks) {
+function analyzeRoster(roster, allPlayers, currentWeek, byeWeeks, weekSchedule) {
     const issues = {
         startingByeWeekPlayers: [],
         startingInjuredPlayers: [],
@@ -118,6 +120,11 @@ function analyzeRoster(roster, allPlayers, currentWeek, byeWeeks) {
                 position: getPositionForSlot(i),
                 issue: 'Player not found'
             });
+            continue;
+        }
+
+        // Skip players whose games have already been played this week
+        if (hasTeamPlayedThisWeek(player.team, weekSchedule)) {
             continue;
         }
 
@@ -198,20 +205,55 @@ function analyzePlayer(player, currentWeek, byeWeeks) {
 }
 
 /**
- * Formats the analysis results into a readable message
+ * Formats the analysis results into a readable message using Slack blocks
  * @param {object} analysis The analysis results
- * @returns {string} Formatted message
+ * @returns {object} Slack message payload with blocks and fallback text
  */
 function formatAnalysisMessage(analysis) {
     if (analysis.rostersWithIssues === 0) {
-        return `✅ 🏈 ROSTER CHECK - WEEK ${analysis.currentWeek} 🏈\n\n🎯 All ${analysis.totalRosters} starting lineups look good! No issues found. �`;
+        const successText = `✅ All ${analysis.totalRosters} starting lineups look good for Week ${analysis.currentWeek}! No issues found.`;
+        
+        return {
+            text: successText,
+            blocks: [
+                {
+                    "type": "section",
+                    "text": { "type": "mrkdwn", "text": `:white_check_mark: *ROSTER CHECK - WEEK ${analysis.currentWeek}* :white_check_mark:` }
+                },
+                {
+                    "type": "section",
+                    "text": { "type": "mrkdwn", "text": `🎯 All ${analysis.totalRosters} starting lineups look good! No issues found. 🏆` }
+                }
+            ]
+        };
     }
 
-    const messages = [`🔍 STARTING LINEUP ANALYSIS - WEEK ${analysis.currentWeek}\n`];
-    messages.push(`⚠️ Found issues with ${analysis.rostersWithIssues} out of ${analysis.totalRosters} rosters:\n`);
+    // Build blocks for issues
+    const blocks = [
+        {
+            "type": "section",
+            "text": { "type": "mrkdwn", "text": `:warning: *ROSTER ALERT - WEEK ${analysis.currentWeek}* :warning:` }
+        },
+        {
+            "type": "section",
+            "text": { "type": "mrkdwn", "text": `⚠️ Found issues with *${analysis.rostersWithIssues}* out of *${analysis.totalRosters}* rosters:` }
+        },
+        { "type": "divider" }
+    ];
+
+    // Create fallback text
+    let fallbackText = `Roster Alert - Week ${analysis.currentWeek}: Found issues with ${analysis.rostersWithIssues} out of ${analysis.totalRosters} rosters:\n\n`;
 
     for (const rosterIssue of analysis.rosterAnalysis) {
-        messages.push(`*${rosterIssue.owner}:*`);
+        // Add owner header
+        blocks.push({
+            "type": "section",
+            "text": { "type": "mrkdwn", "text": `👤 *${rosterIssue.owner}*` }
+        });
+
+        fallbackText += `${rosterIssue.owner}:\n`;
+
+        const issueFields = [];
 
         // Empty starting slots (critical)
         if (rosterIssue.issues.emptyStartingSlots.length > 0) {
@@ -221,25 +263,72 @@ function formatAnalysisMessage(analysis) {
                 }
                 return `${slot.position} (Empty)`;
             }).join(', ');
-            messages.push(`  ❌ EMPTY STARTING SLOTS: ${emptySlots}`);
+            
+            issueFields.push({
+                "type": "mrkdwn",
+                "text": `❌ *Empty Slots:* ${emptySlots}`
+            });
+            fallbackText += `  ❌ Empty Slots: ${emptySlots}\n`;
         }
 
         // Starting lineup bye week players (critical)
         if (rosterIssue.issues.startingByeWeekPlayers.length > 0) {
-            messages.push(`  🏖️ STARTING PLAYERS ON BYE: ${rosterIssue.issues.startingByeWeekPlayers.map(p => `${p.name} (${p.position}, ${p.team})`).join(', ')}`);
+            const byePlayers = rosterIssue.issues.startingByeWeekPlayers.map(p => `${p.name} (${p.position}, ${p.team})`).join(', ');
+            
+            issueFields.push({
+                "type": "mrkdwn",
+                "text": `🏖️ *On Bye:* ${byePlayers}`
+            });
+            fallbackText += `  🏖️ On Bye: ${byePlayers}\n`;
         }
 
         // Starting lineup injured players (critical)
         if (rosterIssue.issues.startingInjuredPlayers.length > 0) {
-            messages.push(`  🚑 STARTING INJURED PLAYERS: ${rosterIssue.issues.startingInjuredPlayers.map(p => `${p.name} (${p.position}, ${p.injuryStatus})`).join(', ')}`);
+            const injuredPlayers = rosterIssue.issues.startingInjuredPlayers.map(p => `${p.name} (${p.position}, ${p.injuryStatus})`).join(', ');
+            
+            issueFields.push({
+                "type": "mrkdwn",
+                "text": `🚑 *Injured:* ${injuredPlayers}`
+            });
+            fallbackText += `  🚑 Injured: ${injuredPlayers}\n`;
         }
 
-        messages.push(''); // Empty line between rosters
+        // Add fields to the block
+        if (issueFields.length > 0) {
+            blocks.push({
+                "type": "section",
+                "fields": issueFields
+            });
+        }
+
+        // Add divider between rosters (except after the last one)
+        if (rosterIssue !== analysis.rosterAnalysis[analysis.rosterAnalysis.length - 1]) {
+            blocks.push({ "type": "divider" });
+        }
+
+        fallbackText += '\n';
     }
 
-    messages.push(`⏰ Analysis completed at ${new Date(analysis.analyzedAt).toLocaleString()} UTC`);
+    // Add timestamp
+    blocks.push(
+        { "type": "divider" },
+        {
+            "type": "context",
+            "elements": [
+                {
+                    "type": "mrkdwn",
+                    "text": `⏰ Analysis completed at ${new Date(analysis.analyzedAt).toLocaleString()}`
+                }
+            ]
+        }
+    );
 
-    return messages.join('\n');
+    fallbackText += `Analysis completed at ${new Date(analysis.analyzedAt).toLocaleString()}`;
+
+    return {
+        text: fallbackText,
+        blocks: blocks
+    };
 }
 
 module.exports = {

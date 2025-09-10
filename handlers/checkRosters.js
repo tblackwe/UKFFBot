@@ -28,40 +28,120 @@ const handleCheckRostersCommand = async ({ command, say, ack }) => {
         const leagues = await getLeaguesByChannel(channelId);
         
         if (leagues.length === 0) {
-            await threadedSay('📭 No leagues are registered to this channel.\n\nUse `@UKFFBot register league [league_id]` first to register a Sleeper league.');
+            const noLeaguesMessage = {
+                text: '📭 No leagues are registered to this channel. Use @UKFFBot register league [league_id] first to register a Sleeper league.',
+                blocks: [
+                    {
+                        type: "section",
+                        text: {
+                            type: "mrkdwn",
+                            text: "📭 *No leagues are registered to this channel.*\n\nUse `@UKFFBot register league [league_id]` first to register a Sleeper league."
+                        }
+                    }
+                ]
+            };
+            
+            if (threadTs) {
+                await say({ ...noLeaguesMessage, thread_ts: threadTs });
+            } else {
+                await say(noLeaguesMessage);
+            }
             return;
         }
 
         // Show initial message
-        await threadedSay('🔍 Analyzing rosters for issues... This may take a moment.');
+        const initialMessage = {
+            text: '🔍 Analyzing rosters for issues... This may take a moment.',
+            blocks: [
+                {
+                    type: "section",
+                    text: {
+                        type: "mrkdwn",
+                        text: "🔍 *Analyzing rosters for issues...*\nThis may take a moment."
+                    }
+                }
+            ]
+        };
+        
+        if (threadTs) {
+            await say({ ...initialMessage, thread_ts: threadTs });
+        } else {
+            await say(initialMessage);
+        }
 
         // Analyze each league
         for (const league of leagues) {
             try {
                 const analysis = await analyzeLeagueRosters(league.leagueId);
-                const message = formatAnalysisMessage(analysis);
+                const messageData = formatAnalysisMessage(analysis);
                 
-                // Add league header
-                const leagueHeader = `\n**${league.leagueName}** (${league.season})\n${'-'.repeat(40)}`;
-                await threadedSay(leagueHeader + '\n' + message);
+                // Add league header and create blocks
+                const leagueHeaderText = `**${league.leagueName}** (${league.season})`;
+                const headerBlock = {
+                    type: "section",
+                    text: {
+                        type: "mrkdwn",
+                        text: `*${league.leagueName}* (${league.season})`
+                    }
+                };
+                
+                // Send the message with blocks if in a thread
+                if (threadTs) {
+                    await say({ 
+                        text: leagueHeaderText + '\n' + messageData.text,
+                        blocks: [headerBlock, { type: "divider" }, ...messageData.blocks],
+                        thread_ts: threadTs 
+                    });
+                } else {
+                    await say({
+                        text: leagueHeaderText + '\n' + messageData.text,
+                        blocks: [headerBlock, { type: "divider" }, ...messageData.blocks]
+                    });
+                }
                 
             } catch (error) {
                 console.error(`Error analyzing league ${league.leagueId}:`, error);
-                await threadedSay(`❌ Failed to analyze league "${league.leagueName}": ${error.message}`);
+                const errorMessage = {
+                    text: `❌ Failed to analyze league "${league.leagueName}": ${error.message}`,
+                    blocks: [
+                        {
+                            type: "section",
+                            text: {
+                                type: "mrkdwn",
+                                text: `❌ *Failed to analyze league "${league.leagueName}"*\n${error.message}`
+                            }
+                        }
+                    ]
+                };
+                
+                if (threadTs) {
+                    await say({ ...errorMessage, thread_ts: threadTs });
+                } else {
+                    await say(errorMessage);
+                }
             }
         }
 
         // Add helpful footer
-        const footer = [
-            '\n*Starting Lineup Check Tips:*',
-            '• ❌ = Empty starting slots (fill immediately!)',
-            '• ⚠️ = Starting players on bye (swap out!)',
-            '• 🚑 = Starting injured players (OUT, DOUBTFUL, IR, etc. - excludes QUESTIONABLE)',
-            '• Only starting lineup issues are shown - bench players excluded',
-            '• Check back regularly as injury statuses change!'
-        ].join('\n');
+        const footerMessage = {
+            text: 'Starting Lineup Check Tips: Empty slots, bye weeks, and injured players shown',
+            blocks: [
+                { type: "divider" },
+                {
+                    type: "section",
+                    text: {
+                        type: "mrkdwn",
+                        text: "*Starting Lineup Check Tips:*\n• ❌ = Empty starting slots (fill immediately!)\n• ⚠️ = Starting players on bye (swap out!)\n• 🚑 = Starting injured players (OUT, DOUBTFUL, IR, etc. - excludes QUESTIONABLE)\n• Only starting lineup issues are shown - bench players excluded\n• Check back regularly as injury statuses change!"
+                    }
+                }
+            ]
+        };
         
-        await threadedSay(footer);
+        if (threadTs) {
+            await say({ ...footerMessage, thread_ts: threadTs });
+        } else {
+            await say(footerMessage);
+        }
         
         console.log(`[CHECK_ROSTERS] ==> ROSTER ANALYSIS COMPLETED FOR ${leagues.length} LEAGUES <==`);
 
@@ -99,35 +179,106 @@ const handleCheckLeagueRostersCommand = async ({ command, say, ack }) => {
 
     // Basic validation - Sleeper league IDs are typically numeric
     if (!/^[0-9]+$/.test(leagueId)) {
-        await threadedSay('League ID should be numeric. Please check the ID and try again.');
+        const validationMessage = {
+            text: 'League ID should be numeric. Please check the ID and try again.',
+            blocks: [
+                {
+                    type: "section",
+                    text: {
+                        type: "mrkdwn",
+                        text: "❌ *Invalid League ID*\nLeague ID should be numeric. Please check the ID and try again."
+                    }
+                }
+            ]
+        };
+        
+        if (threadTs) {
+            await say({ ...validationMessage, thread_ts: threadTs });
+        } else {
+            await say(validationMessage);
+        }
         return;
     }
 
     try {
-        await threadedSay('🔍 Analyzing league rosters... This may take a moment.');
+        const analysisMessage = {
+            text: '🔍 Analyzing league rosters... This may take a moment.',
+            blocks: [
+                {
+                    type: "section",
+                    text: {
+                        type: "mrkdwn",
+                        text: "🔍 *Analyzing league rosters...*\nThis may take a moment."
+                    }
+                }
+            ]
+        };
+        
+        if (threadTs) {
+            await say({ ...analysisMessage, thread_ts: threadTs });
+        } else {
+            await say(analysisMessage);
+        }
         
         const analysis = await analyzeLeagueRosters(leagueId);
-        const message = formatAnalysisMessage(analysis);
+        const messageData = formatAnalysisMessage(analysis);
         
-        await threadedSay(message);
+        if (threadTs) {
+            await say({ 
+                text: messageData.text,
+                blocks: messageData.blocks,
+                thread_ts: threadTs 
+            });
+        } else {
+            await say({
+                text: messageData.text,
+                blocks: messageData.blocks
+            });
+        }
 
         // Add helpful footer
-        const footer = [
-            '\n*Starting Lineup Check Tips:*',
-            '• ❌ = Empty starting slots (fill immediately!)',
-            '• ⚠️ = Starting players on bye (swap out!)',
-            '• 🚑 = Starting injured players (OUT, DOUBTFUL, IR, etc. - excludes QUESTIONABLE)',
-            '• Only starting lineup issues are shown - bench players excluded',
-            '• Check back regularly as injury statuses change!'
-        ].join('\n');
+        const footerMessage = {
+            text: 'Starting Lineup Check Tips: Empty slots, bye weeks, and injured players shown',
+            blocks: [
+                { type: "divider" },
+                {
+                    type: "section",
+                    text: {
+                        type: "mrkdwn",
+                        text: "*Starting Lineup Check Tips:*\n• ❌ = Empty starting slots (fill immediately!)\n• ⚠️ = Starting players on bye (swap out!)\n• 🚑 = Starting injured players (OUT, DOUBTFUL, IR, etc. - excludes QUESTIONABLE)\n• Only starting lineup issues are shown - bench players excluded\n• Check back regularly as injury statuses change!"
+                    }
+                }
+            ]
+        };
         
-        await threadedSay(footer);
+        if (threadTs) {
+            await say({ ...footerMessage, thread_ts: threadTs });
+        } else {
+            await say(footerMessage);
+        }
 
     } catch (error) {
         console.error('Error in handleCheckLeagueRostersCommand:', error);
         
         if (error.message.includes('failed') || error.message.includes('404')) {
-            await threadedSay(`❌ League with ID "${leagueId}" not found. Please check the league ID and try again.`);
+            const notFoundMessage = {
+                text: `❌ League with ID "${leagueId}" not found. Please check the league ID and try again.`,
+                blocks: [
+                    {
+                        type: "section",
+                        text: {
+                            type: "mrkdwn",
+                            text: `❌ *League not found*\nLeague with ID "${leagueId}" not found. Please check the league ID and try again.`
+                        }
+                    }
+                ]
+            };
+            
+            if (threadTs) {
+                await say({ ...notFoundMessage, thread_ts: threadTs });
+            } else {
+                await say(notFoundMessage);
+            }
         } else {
             await handleCommandError(threadedSay, error, 'checking league rosters');
         }

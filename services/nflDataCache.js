@@ -8,7 +8,7 @@
  * Data is cached in DynamoDB with appropriate TTL and falls back to Sleeper API when needed.
  */
 
-const { saveNflByeWeeks, getNflByeWeeks, saveNflPlayers, getNflPlayers } = require('./datastore.js');
+const { saveNflByeWeeks, getNflByeWeeks, saveNflPlayers, getNflPlayers, saveNflSchedule, getNflSchedule } = require('./datastore.js');
 const { getAllPlayers: sleeperGetAllPlayers, getNflState } = require('./sleeper.js');
 
 /**
@@ -342,9 +342,84 @@ async function saveEssentialPlayersOnly(players) {
     return essentialPlayers;
 }
 
+/**
+ * Get NFL schedule for a specific week with caching.
+ * First checks cache, then falls back to Sleeper API.
+ * 
+ * @param {number} season The NFL season year (e.g., 2025).
+ * @param {number} week The NFL week number.
+ * @returns {Promise<object[]>} Array of game objects for the week.
+ * @throws {Error} if the schedule cannot be retrieved.
+ */
+async function getNflScheduleWithCache(season, week) {
+    try {
+        console.log(`Getting NFL schedule for ${season} week ${week} with cache...`);
+        
+        // Try to get from cache first
+        try {
+            const cachedSchedule = await getNflSchedule(season, week);
+            if (cachedSchedule && Array.isArray(cachedSchedule.games)) {
+                console.log(`Found cached NFL schedule for ${season} week ${week} with ${cachedSchedule.games.length} games`);
+                return cachedSchedule.games;
+            }
+        } catch (error) {
+            console.log(`No cached schedule found for ${season} week ${week}, fetching from Sleeper...`);
+        }
+
+        // Fall back to Sleeper API
+        const { getNflSchedule } = require('./sleeper.js');
+        const schedule = await getNflSchedule(season, week);
+        
+        if (schedule && Array.isArray(schedule)) {
+            console.log(`Fetched NFL schedule from Sleeper: ${schedule.length} games for ${season} week ${week}`);
+            
+            // Cache the schedule data
+            await saveNflSchedule(season, week, schedule);
+            
+            return schedule;
+        } else {
+            console.warn(`No schedule data available for ${season} week ${week}`);
+            return [];
+        }
+    } catch (error) {
+        console.error(`Error getting NFL schedule for ${season} week ${week}:`, error);
+        // Return empty array rather than throwing - allows roster analysis to continue
+        return [];
+    }
+}
+
+/**
+ * Check if a player's team has already played their game this week.
+ * 
+ * @param {string} team The team abbreviation (e.g., 'KC', 'SF').
+ * @param {object[]} weekSchedule Array of game objects for the current week.
+ * @returns {boolean} True if the team's game has already been completed.
+ */
+function hasTeamPlayedThisWeek(team, weekSchedule) {
+    if (!team || !Array.isArray(weekSchedule)) {
+        return false;
+    }
+
+    // Find the game for this team
+    const teamGame = weekSchedule.find(game => 
+        game.home_team === team || game.away_team === team
+    );
+
+    if (!teamGame) {
+        // Team not found in schedule, assume they haven't played
+        return false;
+    }
+
+    // Check if game is completed (status would be 'final' or similar)
+    // The exact status values depend on Sleeper's API format
+    return teamGame.status === 'final' || teamGame.status === 'complete';
+}
+
 module.exports = {
     getNflByeWeeksWithCache,
     getAllPlayersWithCache,
+    getNflScheduleWithCache,
+    hasTeamPlayedThisWeek,
     refreshNflPlayersCache,
     refreshNflByeWeeksCache,
     getCacheStatus,

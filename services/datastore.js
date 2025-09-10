@@ -515,6 +515,77 @@ async function getNflByeWeeks(season) {
 }
 
 /**
+ * Save NFL schedule data to DynamoDB cache.
+ * @param {number} season The NFL season year (e.g., 2025).
+ * @param {number} week The NFL week number.
+ * @param {object[]} games Array of game objects for the week.
+ * @returns {Promise<void>}
+ * @throws {Error} if the schedule cannot be saved.
+ */
+async function saveNflSchedule(season, week, games) {
+    try {
+        const putCommand = new PutCommand({
+            TableName: TABLE_NAME,
+            Item: {
+                PK: 'NFL_CACHE',
+                SK: `SCHEDULE#${season}#${week}`,
+                season: season,
+                week: week,
+                games: games,
+                cachedAt: new Date().toISOString(),
+                // Schedule cache expires after 1 week (games complete and become stale)
+                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+            }
+        });
+        
+        await docClient.send(putCommand);
+    } catch (error) {
+        console.error(`Error saving NFL schedule for ${season} week ${week} to DynamoDB:`, error);
+        throw error;
+    }
+}
+
+/**
+ * Get NFL schedule data from DynamoDB cache.
+ * @param {number} season The NFL season year (e.g., 2025).
+ * @param {number} week The NFL week number.
+ * @returns {Promise<object|null>} The schedule object or null if not found/expired.
+ * @throws {Error} if the schedule cannot be retrieved.
+ */
+async function getNflSchedule(season, week) {
+    try {
+        const getCommand = new GetCommand({
+            TableName: TABLE_NAME,
+            Key: {
+                PK: 'NFL_CACHE',
+                SK: `SCHEDULE#${season}#${week}`
+            }
+        });
+        
+        const response = await docClient.send(getCommand);
+        if (!response.Item) {
+            return null;
+        }
+        
+        // Check if cache has expired
+        const expiresAt = new Date(response.Item.expiresAt);
+        if (expiresAt < new Date()) {
+            return null;
+        }
+        
+        return {
+            season: response.Item.season,
+            week: response.Item.week,
+            games: response.Item.games,
+            cachedAt: response.Item.cachedAt
+        };
+    } catch (error) {
+        console.error(`Error getting NFL schedule for ${season} week ${week} from DynamoDB:`, error);
+        throw error;
+    }
+}
+
+/**
  * Clean up old NFL players cache chunks.
  * @param {string} sport The sport (e.g., 'nfl').
  * @returns {Promise<void>}
@@ -676,6 +747,8 @@ module.exports = {
     getAllChannelsWithLeagues,
     saveNflByeWeeks,
     getNflByeWeeks,
+    saveNflSchedule,
+    getNflSchedule,
     saveNflPlayers,
     getNflPlayers
 };

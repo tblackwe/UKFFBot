@@ -62,7 +62,16 @@ async function processChannelRosters(channelId, leagues) {
         // Send initial message directly to channel (no thread)
         await slack.chat.postMessage({
             channel: channelId,
-            text: '🔍 **Automated Roster Check** - Analyzing rosters for issues... This may take a moment.'
+            text: '🔍 Automated Roster Check - Analyzing rosters for issues...',
+            blocks: [
+                {
+                    type: "section",
+                    text: {
+                        type: "mrkdwn",
+                        text: "🔍 *Automated Roster Check*\nAnalyzing rosters for issues... This may take a moment."
+                    }
+                }
+            ]
         });
 
         // Analyze each league
@@ -71,22 +80,41 @@ async function processChannelRosters(channelId, leagues) {
                 console.log(`Analyzing league ${league.leagueId} (${league.leagueName})`);
                 
                 const analysis = await analyzeLeagueRosters(league.leagueId);
-                const message = formatAnalysisMessage(analysis);
+                const messageData = formatAnalysisMessage(analysis);
                 
-                // Add league header
-                const leagueHeader = `\n**${league.leagueName}** (${league.season})\n${'-'.repeat(40)}`;
+                // Add league header to the text content
+                const leagueHeaderText = `**${league.leagueName}** (${league.season})`;
+                
+                // Create header block
+                const headerBlock = {
+                    type: "section",
+                    text: {
+                        type: "mrkdwn",
+                        text: `*${league.leagueName}* (${league.season})`
+                    }
+                };
                 
                 // Post each league's results directly to channel (no thread)
                 await slack.chat.postMessage({
                     channel: channelId,
-                    text: leagueHeader + '\n' + message
+                    text: leagueHeaderText + '\n' + messageData.text,
+                    blocks: [headerBlock, { type: "divider" }, ...messageData.blocks]
                 });
                 
             } catch (error) {
                 console.error(`Error analyzing league ${league.leagueId}:`, error);
                 await slack.chat.postMessage({
                     channel: channelId,
-                    text: `❌ Failed to analyze league "${league.leagueName}": ${error.message}`
+                    text: `❌ Failed to analyze league "${league.leagueName}": ${error.message}`,
+                    blocks: [
+                        {
+                            type: "section",
+                            text: {
+                                type: "mrkdwn",
+                                text: `❌ *Failed to analyze league "${league.leagueName}"*\n${error.message}`
+                            }
+                        }
+                    ]
                 });
             }
         }
@@ -94,7 +122,16 @@ async function processChannelRosters(channelId, leagues) {
         // Send completion message directly to channel (no thread)
         await slack.chat.postMessage({
             channel: channelId,
-            text: '✅ Automated roster analysis complete!'
+            text: '✅ Automated roster analysis complete!',
+            blocks: [
+                {
+                    type: "section",
+                    text: {
+                        type: "mrkdwn",
+                        text: "✅ *Automated roster analysis complete!*"
+                    }
+                }
+            ]
         });
 
     } catch (error) {
