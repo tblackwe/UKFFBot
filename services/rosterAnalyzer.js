@@ -204,14 +204,14 @@ function analyzePlayer(player, currentWeek, byeWeeks) {
  */
 function formatAnalysisMessage(analysis) {
     if (analysis.rostersWithIssues === 0) {
-        return `✅ **League Roster Check - Week ${analysis.currentWeek}**\n\nAll ${analysis.totalRosters} starting lineups look good! No issues found. 🏈`;
+        return `✅ 🏈 ROSTER CHECK - WEEK ${analysis.currentWeek} 🏈\n\n🎯 All ${analysis.totalRosters} starting lineups look good! No issues found. �`;
     }
 
-    const messages = [`🔍 **League Starting Lineup Analysis - Week ${analysis.currentWeek}**\n`];
-    messages.push(`Found starting lineup issues with **${analysis.rostersWithIssues}** out of **${analysis.totalRosters}** rosters:\n`);
+    const messages = [`🔍 STARTING LINEUP ANALYSIS - WEEK ${analysis.currentWeek}\n`];
+    messages.push(`⚠️ Found issues with ${analysis.rostersWithIssues} out of ${analysis.totalRosters} rosters:\n`);
 
     for (const rosterIssue of analysis.rosterAnalysis) {
-        messages.push(`**${rosterIssue.owner}:**`);
+        messages.push(`*${rosterIssue.owner}:*`);
 
         // Empty starting slots (critical)
         if (rosterIssue.issues.emptyStartingSlots.length > 0) {
@@ -221,23 +221,23 @@ function formatAnalysisMessage(analysis) {
                 }
                 return `${slot.position} (Empty)`;
             }).join(', ');
-            messages.push(`  ❌ **Empty starting slots:** ${emptySlots}`);
+            messages.push(`  ❌ EMPTY STARTING SLOTS: ${emptySlots}`);
         }
 
         // Starting lineup bye week players (critical)
         if (rosterIssue.issues.startingByeWeekPlayers.length > 0) {
-            messages.push(`  ⚠️ **Starting players on BYE:** ${rosterIssue.issues.startingByeWeekPlayers.map(p => `${p.name} (${p.position}, ${p.team})`).join(', ')}`);
+            messages.push(`  🏖️ STARTING PLAYERS ON BYE: ${rosterIssue.issues.startingByeWeekPlayers.map(p => `${p.name} (${p.position}, ${p.team})`).join(', ')}`);
         }
 
         // Starting lineup injured players (critical)
         if (rosterIssue.issues.startingInjuredPlayers.length > 0) {
-            messages.push(`  🚑 **Starting injured players:** ${rosterIssue.issues.startingInjuredPlayers.map(p => `${p.name} (${p.position}, ${p.injuryStatus})`).join(', ')}`);
+            messages.push(`  🚑 STARTING INJURED PLAYERS: ${rosterIssue.issues.startingInjuredPlayers.map(p => `${p.name} (${p.position}, ${p.injuryStatus})`).join(', ')}`);
         }
 
         messages.push(''); // Empty line between rosters
     }
 
-    messages.push(`*Analysis completed at ${new Date(analysis.analyzedAt).toLocaleString()}*`);
+    messages.push(`⏰ Analysis completed at ${new Date(analysis.analyzedAt).toLocaleString()} UTC`);
 
     return messages.join('\n');
 }

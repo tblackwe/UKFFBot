@@ -14,7 +14,8 @@ The roster scheduler automatically runs the "check rosters" command for all regi
 ### 1. Lambda Function: `lambda-roster-scheduler.js`
 - New Lambda function that handles scheduled roster checking
 - Uses the existing roster analysis logic from `handlers/checkRosters.js`
-- Posts results to all Slack channels that have registered leagues
+- Posts results directly to Slack channels (not in threads)
+- Posts separate messages for each league analysis
 
 ### 2. Database Function: `getAllChannelsWithLeagues()`
 - Added to `services/datastore.js`

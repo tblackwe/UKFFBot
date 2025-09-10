@@ -59,13 +59,11 @@ async function processChannelRosters(channelId, leagues) {
     console.log(`Processing rosters for channel ${channelId} with ${leagues.length} leagues`);
 
     try {
-        // Send initial message
-        const initialMessage = await slack.chat.postMessage({
+        // Send initial message directly to channel (no thread)
+        await slack.chat.postMessage({
             channel: channelId,
             text: '🔍 **Automated Roster Check** - Analyzing rosters for issues... This may take a moment.'
         });
-
-        const threadTs = initialMessage.ts;
 
         // Analyze each league
         for (const league of leagues) {
@@ -78,9 +76,9 @@ async function processChannelRosters(channelId, leagues) {
                 // Add league header
                 const leagueHeader = `\n**${league.leagueName}** (${league.season})\n${'-'.repeat(40)}`;
                 
+                // Post each league's results directly to channel (no thread)
                 await slack.chat.postMessage({
                     channel: channelId,
-                    thread_ts: threadTs,
                     text: leagueHeader + '\n' + message
                 });
                 
@@ -88,16 +86,14 @@ async function processChannelRosters(channelId, leagues) {
                 console.error(`Error analyzing league ${league.leagueId}:`, error);
                 await slack.chat.postMessage({
                     channel: channelId,
-                    thread_ts: threadTs,
                     text: `❌ Failed to analyze league "${league.leagueName}": ${error.message}`
                 });
             }
         }
 
-        // Send completion message
+        // Send completion message directly to channel (no thread)
         await slack.chat.postMessage({
             channel: channelId,
-            thread_ts: threadTs,
             text: '✅ Automated roster analysis complete!'
         });
 
