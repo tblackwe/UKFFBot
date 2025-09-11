@@ -52,7 +52,10 @@ function createCommandPatterns(event, say, client = null) {
     },
     { 
       pattern: /^(usage|help)$/i, 
-      handler: () => handleUsageCommand({ say })
+      handler: () => {
+        const commandPayload = createCommandPayload('', event.channel, event.ts);
+        return handleUsageCommand({ command: commandPayload, say });
+      }
     },
     { 
       pattern: /^unregister\sdraft(.+)$/i, 
@@ -127,7 +130,8 @@ async function handleAppMention({ event, say, logger, client }) {
 
     // If no text after mention, show help
     if (!text) {
-      await handleUsageCommand({ say });
+      const commandPayload = createCommandPayload('', event.channel, event.ts);
+      await handleUsageCommand({ command: commandPayload, say });
       return;
     }
 
@@ -153,7 +157,8 @@ async function handleAppMention({ event, say, logger, client }) {
       // Extract first word/phrase for error message
       const firstWord = text.split(/\s+/)[0] || text;
       await say(`Sorry, I don't understand the command \`${firstWord}\`.`);
-      await handleUsageCommand({ say });
+      const commandPayload = createCommandPayload('', event.channel, event.ts);
+      await handleUsageCommand({ command: commandPayload, say });
     }
   } catch (error) {
     logger.error("Error processing app_mention:", error);

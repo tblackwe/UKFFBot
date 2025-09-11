@@ -2,10 +2,21 @@
  * Handles the logic for the `usage` or `help` command.
  * It sends a message describing how to use the bot's commands.
  * @param {object} payload The payload from the Slack command.
+ * @param {object} payload.command The command object.
  * @param {function} payload.say The function to send a message.
  */
-const handleUsageCommand = async ({ say, ack }) => {
+const handleUsageCommand = async ({ command, say, ack }) => {
     if (ack) await ack();
+    const threadTs = command?.ts; // Get the timestamp for threading
+    
+    // Create a threaded say function if we have a timestamp
+    const threadedSay = async (message) => {
+        if (threadTs) {
+            return say({ ...message, thread_ts: threadTs });
+        } else {
+            return say(message);
+        }
+    };
     const usageMessage = {
         blocks: [
             {
@@ -74,7 +85,7 @@ const handleUsageCommand = async ({ say, ack }) => {
         text: "UKFF Slack Bot - Available Commands"
     };
 
-    await say(usageMessage);
+    await threadedSay(usageMessage);
 };
 
 module.exports = { handleUsageCommand };
