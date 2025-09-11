@@ -32,13 +32,38 @@ async function analyzeLeagueRosters(leagueId) {
         const currentSeason = nflState.season;
 
         // Get league data and cached NFL data in parallel
-        const [rosters, users, allPlayers, byeWeeks, weekSchedule] = await Promise.all([
+        const [rosters, users, cachedPlayers, byeWeeks, weekSchedule] = await Promise.all([
             getLeagueRosters(leagueId),
             getLeagueUsers(leagueId),
             getAllPlayersWithCache('nfl'),
             getNflByeWeeksWithCache(currentSeason),
             getNflScheduleWithCache(currentSeason, currentWeek)
         ]);
+
+        // Check if we have missing players and need to fetch full data
+        const allPlayerIds = new Set();
+        rosters.forEach(roster => {
+            if (roster.starters) {
+                roster.starters.forEach(playerId => {
+                    if (playerId && playerId !== '0' && playerId !== '') {
+                        allPlayerIds.add(playerId);
+                    }
+                });
+            }
+        });
+
+        // Check for missing players in cached data
+        const missingPlayerIds = Array.from(allPlayerIds).filter(playerId => !cachedPlayers[playerId]);
+        
+        let allPlayers = cachedPlayers;
+        
+        // If we have missing players (likely IDP), fetch full player data
+        if (missingPlayerIds.length > 0) {
+            console.log(`[ROSTER_ANALYZER] Found ${missingPlayerIds.length} players not in cache, fetching full player data...`);
+            const { getAllPlayers: sleeperGetAllPlayers } = require('./sleeper.js');
+            allPlayers = await sleeperGetAllPlayers('nfl');
+            console.log(`[ROSTER_ANALYZER] Using full player dataset with ${Object.keys(allPlayers).length} players`);
+        }
 
         // Create user lookup map
         const userMap = {};
