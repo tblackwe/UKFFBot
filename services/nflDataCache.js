@@ -344,7 +344,7 @@ async function saveEssentialPlayersOnly(players) {
 
 /**
  * Get NFL schedule for a specific week with caching.
- * First checks cache, then falls back to Sleeper API.
+ * First checks cache, then falls back to ESPN API.
  * 
  * @param {number} season The NFL season year (e.g., 2025).
  * @param {number} week The NFL week number.
@@ -363,15 +363,15 @@ async function getNflScheduleWithCache(season, week) {
                 return cachedSchedule.games;
             }
         } catch (error) {
-            console.log(`No cached schedule found for ${season} week ${week}, fetching from Sleeper...`);
+            console.log(`No cached schedule found for ${season} week ${week}, fetching from ESPN...`);
         }
 
-        // Fall back to Sleeper API
+        // Fall back to ESPN API
         const { getNflSchedule } = require('./sleeper.js');
         const schedule = await getNflSchedule(season, week);
         
         if (schedule && Array.isArray(schedule)) {
-            console.log(`Fetched NFL schedule from Sleeper: ${schedule.length} games for ${season} week ${week}`);
+            console.log(`Fetched NFL schedule from ESPN: ${schedule.length} games for ${season} week ${week}`);
             
             // Cache the schedule data
             await saveNflSchedule(season, week, schedule);

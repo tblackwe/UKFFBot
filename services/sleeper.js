@@ -131,14 +131,60 @@ const getNflState = () => {
 };
 
 /**
- * Get NFL schedule for a specific week and season.
- * See: https://docs.sleeper.com/#get-nfl-schedule
- * @param {string} season The season year (e.g., '2025').
+ * Get NFL schedule for a specific week and season using ESPN API.
+ * @param {string|number} season The season year (e.g., '2025' or 2025).
  * @param {number} week The week number.
  * @returns {Promise<object[]>} Array of game objects for the week.
  */
-const getNflSchedule = (season, week) => {
-    return sleeperRequest(`/schedule/nfl/regular/${season}/${week}`);
+const getNflSchedule = async (season, week) => {
+    const url = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&seasontype=2&year=${season}`;
+    
+    try {
+        const response = await fetch(url);
+        if (!response.ok) {
+            throw new Error(`ESPN API request failed: ${response.status} ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        
+        // Transform ESPN data to our expected format
+        const games = data.events?.map(event => {
+            const competition = event.competitions?.[0];
+            if (!competition) return null;
+            
+            // ESPN has competitors array where [0] is typically home, [1] is away
+            // But we need to check the homeAway property to be sure
+            const homeTeam = competition.competitors?.find(c => c.homeAway === 'home');
+            const awayTeam = competition.competitors?.find(c => c.homeAway === 'away');
+            
+            // Map ESPN status to our expected format
+            let status = 'scheduled';
+            const espnStatus = competition.status?.type?.name;
+            if (espnStatus === 'STATUS_FINAL' || espnStatus === 'STATUS_COMPLETED') {
+                status = 'final';
+            } else if (espnStatus === 'STATUS_IN_PROGRESS') {
+                status = 'in_progress';
+            }
+            
+            return {
+                home_team: homeTeam?.team?.abbreviation,
+                away_team: awayTeam?.team?.abbreviation,
+                status: status,
+                // Include additional useful data
+                home_score: homeTeam?.score || 0,
+                away_score: awayTeam?.score || 0,
+                game_id: event.id,
+                start_time: event.date
+            };
+        }).filter(game => game && game.home_team && game.away_team) || [];
+        
+        console.log(`Fetched ${games.length} games from ESPN API for ${season} week ${week}`);
+        return games;
+        
+    } catch (error) {
+        console.error(`Error fetching NFL schedule from ESPN API for ${season} week ${week}:`, error);
+        throw error;
+    }
 };
 
 module.exports = {
