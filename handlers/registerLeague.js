@@ -15,19 +15,27 @@ const handleRegisterLeagueCommand = async ({ command, say, ack }) => {
     const channelId = command.channel_id;
     const threadTs = command.ts; // Get the timestamp for threading
     
-    // Create a threaded say function if we have a timestamp
-    const threadedSay = async (message) => {
-        if (threadTs) {
-            return say({ text: message, thread_ts: threadTs });
-        } else {
-            return say(message);
-        }
-    };
-    
     // Validate and parse league ID
     const { isValid, leagueId, errorMessage } = parseLeagueId(command.text);
     if (!isValid) {
-        await threadedSay(errorMessage);
+        const errorCard = {
+            text: errorMessage,
+            blocks: [
+                {
+                    type: "section",
+                    text: {
+                        type: "mrkdwn",
+                        text: `❌ *Invalid League ID*\n${errorMessage}`
+                    }
+                }
+            ]
+        };
+        
+        if (threadTs) {
+            await say({ ...errorCard, thread_ts: threadTs });
+        } else {
+            await say(errorCard);
+        }
         return;
     }
 
@@ -37,7 +45,24 @@ const handleRegisterLeagueCommand = async ({ command, say, ack }) => {
         const existingLeague = existingLeagues.find(league => league.leagueId === leagueId);
         
         if (existingLeague) {
-            await threadedSay(`⚠️ League "${existingLeague.leagueName}" (${leagueId}) is already registered to this channel.`);
+            const alreadyRegisteredCard = {
+                text: `League "${existingLeague.leagueName}" is already registered to this channel.`,
+                blocks: [
+                    {
+                        type: "section",
+                        text: {
+                            type: "mrkdwn",
+                            text: `⚠️ *League Already Registered*\nLeague "${existingLeague.leagueName}" (${leagueId}) is already registered to this channel.`
+                        }
+                    }
+                ]
+            };
+            
+            if (threadTs) {
+                await say({ ...alreadyRegisteredCard, thread_ts: threadTs });
+            } else {
+                await say(alreadyRegisteredCard);
+            }
             return;
         }
 
@@ -45,33 +70,110 @@ const handleRegisterLeagueCommand = async ({ command, say, ack }) => {
         const leagueData = await getLeague(leagueId);
         
         if (!leagueData) {
-            await threadedSay(`❌ League with ID "${leagueId}" not found. Please check the league ID and try again.`);
+            const notFoundCard = {
+                text: `League with ID "${leagueId}" not found.`,
+                blocks: [
+                    {
+                        type: "section",
+                        text: {
+                            type: "mrkdwn",
+                            text: `❌ *League Not Found*\nLeague with ID "${leagueId}" not found. Please check the league ID and try again.`
+                        }
+                    }
+                ]
+            };
+            
+            if (threadTs) {
+                await say({ ...notFoundCard, thread_ts: threadTs });
+            } else {
+                await say(notFoundCard);
+            }
             return;
         }
 
         // Save the league registration
         await saveLeague(leagueId, channelId, leagueData);
         
-        // Send success message with league details
-        const successMessage = [
-            `✅ Successfully registered league to this channel!`,
-            ``,
-            `**League Details:**`,
-            `• **Name:** ${leagueData.name}`,
-            `• **Season:** ${leagueData.season}`,
-            `• **Sport:** ${leagueData.sport.toUpperCase()}`,
-            `• **Total Rosters:** ${leagueData.total_rosters}`,
-            `• **Status:** ${leagueData.status}`,
-            `• **League ID:** ${leagueId}`,
-            ``,
-            `This channel will now receive updates for this league! 🏈`
-        ].join('\n');
+        // Create a rich success card with league details
+        const statusEmoji = {
+            'in_season': '🏈',
+            'pre_draft': '📝',
+            'drafting': '🎯',
+            'post_season': '🏆',
+            'complete': '✅'
+        }[leagueData.status] || '🏈';
+
+        const successCard = {
+            text: `Successfully registered league "${leagueData.name}" to this channel!`,
+            blocks: [
+                {
+                    type: "section",
+                    text: {
+                        type: "mrkdwn",
+                        text: `✅ *League Successfully Registered!*\nThis channel will now receive updates for this league.`
+                    }
+                },
+                {
+                    type: "divider"
+                },
+                {
+                    type: "section",
+                    text: {
+                        type: "mrkdwn",
+                        text: `*${leagueData.name}*\n${statusEmoji} ${leagueData.status.replace('_', ' ').toUpperCase()} • ${leagueData.season} Season`
+                    }
+                },
+                {
+                    type: "section",
+                    fields: [
+                        {
+                            type: "mrkdwn",
+                            text: `*Sport*\n${leagueData.sport.toUpperCase()}`
+                        },
+                        {
+                            type: "mrkdwn",
+                            text: `*Total Rosters*\n${leagueData.total_rosters}`
+                        },
+                        {
+                            type: "mrkdwn",
+                            text: `*League Type*\n${leagueData.settings?.type === 2 ? 'Dynasty' : 'Redraft'}`
+                        },
+                        {
+                            type: "mrkdwn",
+                            text: `*League ID*\n\`${leagueId}\``
+                        }
+                    ]
+                }
+            ]
+        };
         
-        await threadedSay(successMessage);
+        if (threadTs) {
+            await say({ ...successCard, thread_ts: threadTs });
+        } else {
+            await say(successCard);
+        }
 
     } catch (error) {
         console.error('Error in handleRegisterLeagueCommand:', error);
-        await handleCommandError(threadedSay, error, 'registering league');
+        
+        const errorCard = {
+            text: 'An error occurred while registering the league.',
+            blocks: [
+                {
+                    type: "section",
+                    text: {
+                        type: "mrkdwn",
+                        text: `❌ *Error Registering League*\nSorry, I couldn't complete the league registration. There was an error updating my configuration.`
+                    }
+                }
+            ]
+        };
+        
+        if (threadTs) {
+            await say({ ...errorCard, thread_ts: threadTs });
+        } else {
+            await say(errorCard);
+        }
     }
 };
 
