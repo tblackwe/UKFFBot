@@ -53,10 +53,22 @@ async function analyzeLeagueRosters(leagueId) {
             userMap[user.user_id] = user;
         });
 
+        // Check if this is a guillotine league by looking for empty rosters
+        const isGuillotineLeague = detectGuillotineLeague(league, rosters);
+        if (isGuillotineLeague) {
+            console.log(`[ROSTER_ANALYZER] Detected guillotine league: ${league.name}`);
+        }
+
         const rosterAnalysis = [];
 
         // Analyze each roster
         for (const roster of rosters) {
+            // Skip empty rosters in guillotine leagues (eliminated teams)
+            if (isGuillotineLeague && isEmptyRoster(roster)) {
+                console.log(`[ROSTER_ANALYZER] Skipping empty roster ${roster.roster_id} in guillotine league`);
+                continue;
+            }
+
             const owner = userMap[roster.owner_id];
             const rosterIssues = analyzeRoster(roster, allPlayers, currentWeek, byeWeeks, weekSchedule);
             
@@ -70,12 +82,19 @@ async function analyzeLeagueRosters(leagueId) {
             }
         }
 
+        // Count active rosters for reporting purposes (exclude empty rosters in guillotine leagues)
+        const activeRosters = isGuillotineLeague 
+            ? rosters.filter(roster => !isEmptyRoster(roster)) 
+            : rosters;
+
         return {
             leagueId,
             currentWeek,
             currentSeason,
             totalRosters: rosters.length,
+            activeRosters: activeRosters.length,
             rostersWithIssues: rosterAnalysis.length,
+            isGuillotineLeague,
             rosterAnalysis,
             analyzedAt: new Date().toISOString()
         };
@@ -217,19 +236,22 @@ function analyzePlayer(player, currentWeek, byeWeeks) {
  * @returns {object} Slack message payload with blocks and fallback text
  */
 function formatAnalysisMessage(analysis) {
+    const rosterCount = analysis.activeRosters || analysis.totalRosters;
+    const leagueTypeInfo = analysis.isGuillotineLeague ? " (Guillotine League)" : "";
+    
     if (analysis.rostersWithIssues === 0) {
-        const successText = `✅ All ${analysis.totalRosters} starting lineups look good for Week ${analysis.currentWeek}! No issues found.`;
+        const successText = `✅ All ${rosterCount} active starting lineups look good for Week ${analysis.currentWeek}! No issues found.${leagueTypeInfo}`;
         
         return {
             text: successText,
             blocks: [
                 {
                     "type": "section",
-                    "text": { "type": "mrkdwn", "text": `:white_check_mark: *ROSTER CHECK - WEEK ${analysis.currentWeek}* :white_check_mark:` }
+                    "text": { "type": "mrkdwn", "text": `:white_check_mark: *ROSTER CHECK - WEEK ${analysis.currentWeek}*${leagueTypeInfo} :white_check_mark:` }
                 },
                 {
                     "type": "section",
-                    "text": { "type": "mrkdwn", "text": `🎯 All ${analysis.totalRosters} starting lineups look good! No issues found. 🏆` }
+                    "text": { "type": "mrkdwn", "text": `🎯 All ${rosterCount} active starting lineups look good! No issues found. 🏆` }
                 }
             ]
         };
@@ -239,17 +261,17 @@ function formatAnalysisMessage(analysis) {
     const blocks = [
         {
             "type": "section",
-            "text": { "type": "mrkdwn", "text": `:warning: *ROSTER ALERT - WEEK ${analysis.currentWeek}* :warning:` }
+            "text": { "type": "mrkdwn", "text": `:warning: *ROSTER ALERT - WEEK ${analysis.currentWeek}*${leagueTypeInfo} :warning:` }
         },
         {
             "type": "section",
-            "text": { "type": "mrkdwn", "text": `⚠️ Found issues with *${analysis.rostersWithIssues}* out of *${analysis.totalRosters}* rosters:` }
+            "text": { "type": "mrkdwn", "text": `⚠️ Found issues with *${analysis.rostersWithIssues}* out of *${rosterCount}* active rosters:` }
         },
         { "type": "divider" }
     ];
 
     // Create fallback text
-    let fallbackText = `Roster Alert - Week ${analysis.currentWeek}: Found issues with ${analysis.rostersWithIssues} out of ${analysis.totalRosters} rosters:\n\n`;
+    let fallbackText = `Roster Alert - Week ${analysis.currentWeek}${leagueTypeInfo}: Found issues with ${analysis.rostersWithIssues} out of ${rosterCount} active rosters:\n\n`;
 
     for (const rosterIssue of analysis.rosterAnalysis) {
         // Add owner header
@@ -338,10 +360,40 @@ function formatAnalysisMessage(analysis) {
     };
 }
 
+/**
+ * Detects if a league is a guillotine league by looking for empty rosters and league name patterns
+ * @param {object} league The league object from Sleeper
+ * @param {object[]} rosters Array of roster objects
+ * @returns {boolean} True if this appears to be a guillotine league
+ */
+function detectGuillotineLeague(league, rosters) {
+    // Check for empty rosters (primary indicator)
+    const hasEmptyRosters = rosters.some(roster => isEmptyRoster(roster));
+    
+    // Check league name for guillotine-related keywords
+    const guillotineKeywords = ['guillotine', 'chopping', 'elimination', 'survival', 'last man', 'survivor'];
+    const leagueName = league.name ? league.name.toLowerCase() : '';
+    const hasGuillotineName = guillotineKeywords.some(keyword => leagueName.includes(keyword));
+    
+    // Return true if we have empty rosters OR guillotine keywords in the name
+    return hasEmptyRosters || hasGuillotineName;
+}
+
+/**
+ * Checks if a roster is completely empty (no players)
+ * @param {object} roster The roster object from Sleeper
+ * @returns {boolean} True if the roster has no players
+ */
+function isEmptyRoster(roster) {
+    return !roster.players || roster.players.length === 0;
+}
+
 module.exports = {
     analyzeLeagueRosters,
     analyzeRoster,
     analyzePlayer,
     formatAnalysisMessage,
-    getPositionForSlot
+    getPositionForSlot,
+    detectGuillotineLeague,
+    isEmptyRoster
 };

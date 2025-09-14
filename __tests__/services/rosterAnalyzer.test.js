@@ -1,4 +1,4 @@
-const { analyzePlayer, analyzeRoster, formatAnalysisMessage, getPositionForSlot } = require('../../services/rosterAnalyzer');
+const { analyzePlayer, analyzeRoster, formatAnalysisMessage, getPositionForSlot, detectGuillotineLeague, isEmptyRoster } = require('../../services/rosterAnalyzer');
 const { NFL_BYE_WEEKS_2025 } = require('../../services/nflDataCache');
 
 describe('rosterAnalyzer', () => {
@@ -153,6 +153,7 @@ describe('rosterAnalyzer', () => {
             const analysis = {
                 currentWeek: 5,
                 totalRosters: 10,
+                activeRosters: 10,
                 rostersWithIssues: 0,
                 rosterAnalysis: []
             };
@@ -161,14 +162,14 @@ describe('rosterAnalyzer', () => {
 
             expect(result).toHaveProperty('text');
             expect(result).toHaveProperty('blocks');
-            expect(result.text).toContain('All 10 starting lineups look good for Week 5');
+            expect(result.text).toContain('All 10 active starting lineups look good for Week 5');
             expect(result.text).toContain('No issues found');
             expect(result.blocks).toEqual(
                 expect.arrayContaining([
                     expect.objectContaining({
                         type: "section",
                         text: expect.objectContaining({
-                            text: expect.stringContaining("All 10 starting lineups look good!")
+                            text: expect.stringContaining("All 10 active starting lineups look good!")
                         })
                     })
                 ])
@@ -179,6 +180,7 @@ describe('rosterAnalyzer', () => {
             const analysis = {
                 currentWeek: 5,
                 totalRosters: 10,
+                activeRosters: 10,
                 rostersWithIssues: 2,
                 rosterAnalysis: [
                     {
@@ -212,7 +214,7 @@ describe('rosterAnalyzer', () => {
             expect(result).toHaveProperty('text');
             expect(result).toHaveProperty('blocks');
             expect(result.text).toContain('Roster Alert - Week 5');
-            expect(result.text).toContain('Found issues with 2 out of 10 rosters');
+            expect(result.text).toContain('Found issues with 2 out of 10 active rosters');
             expect(result.text).toContain('Test Owner 1');
             expect(result.text).toContain('Test Owner 2');
             expect(result.blocks).toEqual(
@@ -256,6 +258,63 @@ describe('rosterAnalyzer', () => {
                 expect(week).toBeGreaterThanOrEqual(5);
                 expect(week).toBeLessThanOrEqual(14);
             });
+        });
+    });
+
+    describe('detectGuillotineLeague', () => {
+        test('should detect guillotine league by name keywords', () => {
+            const guillotineLeague1 = { name: 'The UKNR Chopping Block' };
+            const guillotineLeague2 = { name: 'Survivor League 2025' };
+            const guillotineLeague3 = { name: 'Guillotine Fantasy Football' };
+            const guillotineLeague4 = { name: 'Elimination Chamber' };
+            const guillotineLeague5 = { name: 'Last Man Standing' };
+            
+            const normalRoster = { players: ['123', '456', '789'] };
+            const rosters = [normalRoster, normalRoster];
+
+            expect(detectGuillotineLeague(guillotineLeague1, rosters)).toBe(true);
+            expect(detectGuillotineLeague(guillotineLeague2, rosters)).toBe(true);
+            expect(detectGuillotineLeague(guillotineLeague3, rosters)).toBe(true);
+            expect(detectGuillotineLeague(guillotineLeague4, rosters)).toBe(true);
+            expect(detectGuillotineLeague(guillotineLeague5, rosters)).toBe(true);
+        });
+
+        test('should detect guillotine league by empty rosters', () => {
+            const regularLeague = { name: 'Regular Fantasy League' };
+            const normalRoster = { players: ['123', '456', '789'] };
+            const emptyRoster = { players: [] };
+            
+            const rostersWithEmpty = [normalRoster, emptyRoster, normalRoster];
+            const rostersWithoutEmpty = [normalRoster, normalRoster];
+
+            expect(detectGuillotineLeague(regularLeague, rostersWithEmpty)).toBe(true);
+            expect(detectGuillotineLeague(regularLeague, rostersWithoutEmpty)).toBe(false);
+        });
+
+        test('should not detect regular leagues as guillotine', () => {
+            const regularLeague1 = { name: 'Fantasy Football League' };
+            const regularLeague2 = { name: 'The Championship' };
+            const regularLeague3 = { name: 'Dynasty League' };
+            
+            const normalRoster = { players: ['123', '456', '789'] };
+            const rosters = [normalRoster, normalRoster];
+
+            expect(detectGuillotineLeague(regularLeague1, rosters)).toBe(false);
+            expect(detectGuillotineLeague(regularLeague2, rosters)).toBe(false);
+            expect(detectGuillotineLeague(regularLeague3, rosters)).toBe(false);
+        });
+    });
+
+    describe('isEmptyRoster', () => {
+        test('should detect empty rosters', () => {
+            expect(isEmptyRoster({ players: [] })).toBe(true);
+            expect(isEmptyRoster({ players: null })).toBe(true);
+            expect(isEmptyRoster({})).toBe(true);
+        });
+
+        test('should not flag rosters with players as empty', () => {
+            expect(isEmptyRoster({ players: ['123'] })).toBe(false);
+            expect(isEmptyRoster({ players: ['123', '456', '789'] })).toBe(false);
         });
     });
 });
