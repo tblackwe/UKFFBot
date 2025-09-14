@@ -1,4 +1,4 @@
-const { getLeagueRosters, getLeagueUsers, getNflState, getLeague } = require('./sleeper.js');
+const { getLeagueRosters, getLeagueUsers, getNflState } = require('./sleeper.js');
 const { getNflByeWeeksWithCache, getAllPlayersWithCache, getNflScheduleWithCache, hasTeamPlayedThisWeek } = require('./nflDataCache.js');
 
 /**
@@ -26,17 +26,10 @@ const INJURY_STATUS = {
  */
 async function analyzeLeagueRosters(leagueId) {
     try {
-        // Get league data and current NFL state
-        const [league, nflState] = await Promise.all([
-            getLeague(leagueId),
-            getNflState()
-        ]);
-        
+        // Get current NFL state to determine current week
+        const nflState = await getNflState();
         const currentWeek = nflState.display_week || nflState.week;
-        // Use the league's season, not the NFL state season
-        const currentSeason = league.season;
-
-        console.log(`[ROSTER_ANALYZER] Analyzing league ${leagueId} for season ${currentSeason}, week ${currentWeek}`);
+        const currentSeason = nflState.season;
 
         // Get league data and cached NFL data in parallel
         const [rosters, users, allPlayers, byeWeeks, weekSchedule] = await Promise.all([
@@ -255,7 +248,7 @@ function formatAnalysisMessage(analysis) {
         // Add owner header
         blocks.push({
             "type": "section",
-            "text": { "type": "mrkdwn", "text": `👤 *${rosterIssue.owner}*` }
+            "text": { "type": "mrkdwn", "text": `👤 *${rosterIssue.owner.toUpperCase()}*` }
         });
 
         fallbackText += `${rosterIssue.owner}:\n`;

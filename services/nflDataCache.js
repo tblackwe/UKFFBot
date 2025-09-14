@@ -344,7 +344,7 @@ async function saveEssentialPlayersOnly(players) {
 
 /**
  * Get NFL schedule for a specific week with caching.
- * First checks cache, then falls back to ESPN API.
+ * First checks cache, then falls back to Sleeper API.
  * 
  * @param {number} season The NFL season year (e.g., 2025).
  * @param {number} week The NFL week number.
@@ -363,15 +363,15 @@ async function getNflScheduleWithCache(season, week) {
                 return cachedSchedule.games;
             }
         } catch (error) {
-            console.log(`No cached schedule found for ${season} week ${week}, fetching from ESPN...`);
+            console.log(`No cached schedule found for ${season} week ${week}, fetching from Sleeper...`);
         }
 
-        // Fall back to ESPN API
+        // Fall back to Sleeper API
         const { getNflSchedule } = require('./sleeper.js');
         const schedule = await getNflSchedule(season, week);
         
         if (schedule && Array.isArray(schedule)) {
-            console.log(`Fetched NFL schedule from ESPN: ${schedule.length} games for ${season} week ${week}`);
+            console.log(`Fetched NFL schedule from Sleeper: ${schedule.length} games for ${season} week ${week}`);
             
             // Cache the schedule data
             await saveNflSchedule(season, week, schedule);
@@ -389,6 +389,19 @@ async function getNflScheduleWithCache(season, week) {
 }
 
 /**
+ * Maps Sleeper team abbreviations to ESPN team abbreviations.
+ * @param {string} sleeperTeam The team abbreviation from Sleeper.
+ * @returns {string} The corresponding ESPN team abbreviation.
+ */
+function mapSleeperToEspnTeam(sleeperTeam) {
+    const teamMap = {
+        'WAS': 'WSH',  // Washington
+        // Add other mappings if needed
+    };
+    return teamMap[sleeperTeam] || sleeperTeam;
+}
+
+/**
  * Check if a player's team has already played their game this week.
  * 
  * @param {string} team The team abbreviation (e.g., 'KC', 'SF').
@@ -400,9 +413,13 @@ function hasTeamPlayedThisWeek(team, weekSchedule) {
         return false;
     }
 
-    // Find the game for this team
+    // Map Sleeper team abbreviation to ESPN format
+    const espnTeam = mapSleeperToEspnTeam(team);
+
+    // Find the game for this team (try both original and mapped team names)
     const teamGame = weekSchedule.find(game => 
-        game.home_team === team || game.away_team === team
+        game.home_team === team || game.away_team === team ||
+        game.home_team === espnTeam || game.away_team === espnTeam
     );
 
     if (!teamGame) {

@@ -131,6 +131,19 @@ const getNflState = () => {
 };
 
 /**
+ * Maps Sleeper team abbreviations to ESPN team abbreviations.
+ * @param {string} sleeperTeam The team abbreviation from Sleeper.
+ * @returns {string} The corresponding ESPN team abbreviation.
+ */
+function mapSleeperToEspnTeam(sleeperTeam) {
+    const teamMap = {
+        'WAS': 'WSH',  // Washington
+        // Add other mappings if needed
+    };
+    return teamMap[sleeperTeam] || sleeperTeam;
+}
+
+/**
  * Get NFL schedule for a specific week and season using ESPN API.
  * @param {string|number} season The season year (e.g., '2025' or 2025).
  * @param {number} week The week number.
