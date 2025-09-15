@@ -110,38 +110,45 @@ function expandMinimalPlayerData(minimalPlayers) {
  * This reduces the data size to under 400KB for DynamoDB storage.
  * Only includes the most essential data: name, team, and primary position.
  * 
+ * Now includes ALL active players regardless of position, since if they're on 
+ * someone's roster, they are by definition fantasy relevant.
+ * 
  * @param {object} players Full player data from Sleeper API
  * @returns {object} Ultra-minimal player data for caching
  */
 function extractEssentialPlayerData(players) {
     const essentialPlayers = {};
     
-    // Define fantasy-relevant positions to reduce dataset further
-    const FANTASY_POSITIONS = new Set(['QB', 'RB', 'WR', 'TE', 'K', 'DEF']);
-    
     Object.entries(players).forEach(([playerId, player]) => {
-        // Include players that are active OR have fantasy positions OR are test data
+        // Include players that are active OR are test data
         // Test data detection: simple players with basic fields
         const isTestData = player.player_id && player.full_name && !player.hasOwnProperty('active');
         const isActivePlayer = player.active === true;
-        const hasFantasyPositions = player.fantasy_positions && player.fantasy_positions.length > 0;
         
-        // For real data, also check if they have fantasy-relevant positions
-        const primaryPosition = player.fantasy_positions?.[0] || player.position || 'UNKNOWN';
-        const isFantasyRelevant = isTestData || FANTASY_POSITIONS.has(primaryPosition);
-        
-        if ((isTestData || (isActivePlayer && hasFantasyPositions)) && isFantasyRelevant) {
+        // Include ALL active players - if they're in Sleeper, they could be rostered
+        if (isTestData || isActivePlayer) {
             // For DEF players, construct name from first_name + last_name if full_name is undefined
             let playerName = player.full_name;
             if (!playerName && player.first_name && player.last_name) {
                 playerName = `${player.first_name} ${player.last_name}`;
             }
             
+            // Use the best available position - prefer fantasy_positions over position
+            let displayPosition = 'UNKNOWN';
+            if (player.fantasy_positions && player.fantasy_positions.length > 0) {
+                // For players with multiple positions, prefer commonly-used fantasy positions
+                const PREFERRED_POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
+                const preferredPos = player.fantasy_positions.find(pos => PREFERRED_POSITIONS.includes(pos));
+                displayPosition = preferredPos || player.fantasy_positions[0];
+            } else if (player.position) {
+                displayPosition = player.position;
+            }
+            
             // Use ultra-short property names to minimize size
             essentialPlayers[playerId] = {
                 n: playerName || '', // name
                 t: player.team || null,    // team
-                p: primaryPosition,        // position
+                p: displayPosition,        // position
                 // For test compatibility, include injury status if it exists
                 ...(player.injury_status && { i: player.injury_status })
             };
@@ -152,74 +159,13 @@ function extractEssentialPlayerData(players) {
 }
 
 /**
- * Get all NFL players with essential data caching.
- * First checks cache for essential data, then falls back to Sleeper API.
- * Only caches essential fields to avoid DynamoDB size limits.
+ * Fetch specific players from Sleeper API and add them to cache.
+ * This is the new roster-based caching approach - only cache players that are on rosters.
  * 
- * @param {string} sport The sport (default: 'nfl').
- * @returns {Promise<object>} Object containing all players data.
+ * @param {string[]} playerIds Array of player IDs that need to be fetched
+ * @param {string} sport The sport (default: 'nfl')
+ * @returns {Promise<object>} Object containing the fetched players
  */
-async function getAllPlayersWithCache(sport = 'nfl') {
-    try {
-        console.log(`[CACHE] Starting getAllPlayersWithCache for sport: ${sport}`);
-        
-        // Try to get essential data from cache first
-        console.log(`[CACHE] Checking cache for ${sport} essential player data...`);
-        const cachedMinimalPlayers = await getNflPlayers(sport);
-        if (cachedMinimalPlayers) {
-            console.log(`[CACHE] Cache hit - using cached essential data (${Object.keys(cachedMinimalPlayers).length} players)`);
-            
-            // Expand minimal data back to expected format
-            const expandedPlayers = expandMinimalPlayerData(cachedMinimalPlayers);
-            console.log(`[CACHE] Expanded ${Object.keys(expandedPlayers).length} cached players to full format`);
-            return expandedPlayers;
-        }
-
-        // Fall back to Sleeper API and cache essential data
-        console.log(`[CACHE] Cache miss - fetching fresh NFL players data from Sleeper API for ${sport}`);
-        const startTime = Date.now();
-        const players = await sleeperGetAllPlayers(sport);
-        const fetchTime = Date.now() - startTime;
-        console.log(`[CACHE] Sleeper API fetch completed in ${fetchTime}ms`);
-        
-        if (!players) {
-            throw new Error(`No players data received from Sleeper API for ${sport}`);
-        }
-
-        const playerCount = Object.keys(players).length;
-        console.log(`[CACHE] Retrieved ${playerCount} players from Sleeper API`);
-
-        // Extract and cache only essential player data
-        console.log(`[CACHE] Extracting essential player data for caching...`);
-        const minimalPlayers = extractEssentialPlayerData(players);
-        const minimalCount = Object.keys(minimalPlayers).length;
-        console.log(`[CACHE] Extracted ${minimalCount} essential player records (${Math.round((minimalCount/playerCount)*100)}% of total)`);
-
-        // Cache the minimal players data
-        console.log(`[CACHE] Saving ${minimalCount} minimal player records to cache...`);
-        const saveStartTime = Date.now();
-        
-        try {
-            await saveNflPlayers(sport, minimalPlayers);
-            const saveTime = Date.now() - saveStartTime;
-            console.log(`[CACHE] Successfully cached minimal NFL players data for ${sport} (${minimalCount} players) in ${saveTime}ms`);
-        } catch (error) {
-            const saveTime = Date.now() - saveStartTime;
-            console.error(`[CACHE] Failed to cache minimal players after ${saveTime}ms:`, error);
-            // Don't throw here - continue with returning expanded data
-            console.log(`[CACHE] Continuing despite cache save failure`);
-        }
-        
-        // Return expanded version of the minimal data for consistency
-        const expandedPlayers = expandMinimalPlayerData(minimalPlayers);
-        console.log(`[CACHE] Returning ${Object.keys(expandedPlayers).length} expanded players`);
-        return expandedPlayers;
-    } catch (error) {
-        console.error(`[CACHE] Error getting NFL players for ${sport}:`, error);
-        console.error(`[CACHE] Error stack:`, error.stack);
-        throw error;
-    }
-}
 
 /**
  * Force refresh of NFL players cache with essential data.
@@ -432,13 +378,148 @@ function hasTeamPlayedThisWeek(team, weekSchedule) {
     return teamGame.status === 'final' || teamGame.status === 'complete';
 }
 
+/**
+ * Fetch specific players from Sleeper API and add them to cache.
+ * This is the new roster-based caching approach - only cache players that are on rosters.
+ * 
+ * @param {string[]} playerIds Array of player IDs that need to be fetched
+ * @param {string} sport The sport (default: 'nfl')
+ * @returns {Promise<object>} Object containing the fetched players
+ */
+async function fetchAndCacheRosterPlayers(playerIds, sport = 'nfl') {
+    if (!playerIds || playerIds.length === 0) {
+        return {};
+    }
+
+    console.log(`[CACHE] Fetching ${playerIds.length} roster players from Sleeper API: ${playerIds.slice(0, 10).join(', ')}${playerIds.length > 10 ? '...' : ''}`);
+    
+    try {
+        // Fetch fresh data from Sleeper API to get the players
+        const allPlayers = await sleeperGetAllPlayers(sport);
+        
+        // Extract only the requested players
+        const requestedPlayers = {};
+        const foundPlayerIds = [];
+        
+        playerIds.forEach(playerId => {
+            if (allPlayers[playerId]) {
+                requestedPlayers[playerId] = allPlayers[playerId];
+                foundPlayerIds.push(playerId);
+            }
+        });
+        
+        if (foundPlayerIds.length === 0) {
+            console.log(`[CACHE] No requested players found in Sleeper API`);
+            return {};
+        }
+        
+        console.log(`[CACHE] Found ${foundPlayerIds.length} roster players in Sleeper API`);
+        
+        // Extract essential data for the requested players
+        const essentialRosterPlayers = extractEssentialPlayerData(requestedPlayers);
+        
+        // Get current cache and merge with roster players
+        const currentCache = await getNflPlayers(sport) || {};
+        const updatedCache = { ...currentCache, ...essentialRosterPlayers };
+        
+        // Save updated cache
+        await saveNflPlayers(sport, updatedCache);
+        console.log(`[CACHE] Added ${foundPlayerIds.length} roster players to cache`);
+        
+        // Return expanded format for immediate use
+        return expandMinimalPlayerData(essentialRosterPlayers);
+        
+    } catch (error) {
+        console.error(`[CACHE] Error fetching roster players:`, error);
+        return {};
+    }
+}
+
+/**
+ * Get players with roster-based caching.
+ * First checks cache, then fetches only the specific players needed from Sleeper API.
+ * This replaces the old getAllPlayersWithCache for roster-based scenarios.
+ * 
+ * @param {string[]} playerIds Array of player IDs needed
+ * @param {string} sport The sport (default: 'nfl')
+ * @returns {Promise<object>} Object containing the requested players
+ */
+async function getPlayersFromCacheOrFetch(playerIds, sport = 'nfl') {
+    if (!playerIds || playerIds.length === 0) {
+        return {};
+    }
+
+    console.log(`[CACHE] Getting ${playerIds.length} players from cache or fetch`);
+    
+    try {
+        // Get current cache
+        const cachedMinimalPlayers = await getNflPlayers(sport) || {};
+        
+        // Separate cached vs missing players
+        const cachedPlayers = {};
+        const missingPlayerIds = [];
+        
+        playerIds.forEach(playerId => {
+            if (cachedMinimalPlayers[playerId]) {
+                cachedPlayers[playerId] = cachedMinimalPlayers[playerId];
+            } else {
+                missingPlayerIds.push(playerId);
+            }
+        });
+        
+        console.log(`[CACHE] Found ${Object.keys(cachedPlayers).length} players in cache, need to fetch ${missingPlayerIds.length}`);
+        
+        // Fetch missing players
+        let missingPlayers = {};
+        if (missingPlayerIds.length > 0) {
+            missingPlayers = await fetchAndCacheRosterPlayers(missingPlayerIds, sport);
+        }
+        
+        // Combine cached and fetched players
+        const expandedCachedPlayers = expandMinimalPlayerData(cachedPlayers);
+        const allPlayers = { ...expandedCachedPlayers, ...missingPlayers };
+        
+        console.log(`[CACHE] Returning ${Object.keys(allPlayers).length} total players`);
+        return allPlayers;
+        
+    } catch (error) {
+        console.error(`[CACHE] Error getting players from cache or fetch:`, error);
+        throw error;
+    }
+}
+
+/**
+ * Clear the NFL players cache to start fresh with roster-based caching.
+ * This removes all cached player data, forcing the next roster analysis to build a new cache.
+ * 
+ * @param {string} sport The sport (default: 'nfl')
+ * @returns {Promise<void>}
+ */
+async function clearNflPlayersCache(sport = 'nfl') {
+    try {
+        console.log(`[CACHE] Clearing NFL players cache for ${sport} to start fresh with roster-based caching...`);
+        
+        // Save an empty cache object
+        await saveNflPlayers(sport, {});
+        
+        console.log(`[CACHE] Successfully cleared NFL players cache for ${sport}`);
+        console.log(`[CACHE] Next roster analysis will build cache with only roster players`);
+        
+    } catch (error) {
+        console.error(`[CACHE] Error clearing NFL players cache for ${sport}:`, error);
+        throw error;
+    }
+}
+
 module.exports = {
     getNflByeWeeksWithCache,
-    getAllPlayersWithCache,
+    getPlayersFromCacheOrFetch,
+    fetchAndCacheRosterPlayers,
     getNflScheduleWithCache,
     hasTeamPlayedThisWeek,
     refreshNflPlayersCache,
     refreshNflByeWeeksCache,
+    clearNflPlayersCache,
     getCacheStatus,
     NFL_BYE_WEEKS_2025,
     NFL_BYE_WEEKS_BY_SEASON,

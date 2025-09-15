@@ -6,7 +6,20 @@ This document describes the NFL data caching system implemented to improve perfo
 
 The caching system provides cached access to two critical pieces of NFL data:
 1. **NFL Bye Weeks** - Mapping of team abbreviations to bye week numbers for each season
-2. **NFL Player Database** - Complete player information from the Sleeper API
+2. **NFL Player Database** - **ROSTER-BASED CACHING**: Only players that are actually on fantasy rosters are cached
+
+### Key Improvement: Roster-Based Caching
+
+**Previous Behavior**: Cached ALL ~3,000+ NFL players from Sleeper API, regardless of whether they were on any rosters.
+
+**New Behavior**: Cache starts empty and only stores players that are found on actual Sleeper rosters during roster analysis.
+
+**Benefits**:
+- ~99% reduction in cache size (from 3,000+ players to ~100-200 roster players)
+- Faster cache operations
+- Reduced DynamoDB storage costs
+- Lower bandwidth usage
+- Cache grows organically with actual usage
 
 ## Architecture
 
@@ -20,14 +33,18 @@ The caching system provides cached access to two critical pieces of NFL data:
 ### Data Flow
 
 ```
-User Request
+Roster Analysis Request
     ↓
-Cache Check (DynamoDB)
+Collect ALL player IDs from rosters
     ↓
-If Cache Hit → Return Cached Data
+Check cache for each player ID
     ↓
-If Cache Miss → Fetch from Sleeper API → Cache in DynamoDB → Return Data
+If Cache Hit → Use cached data
+    ↓
+If Cache Miss → Fetch ONLY missing players from Sleeper API → Cache them → Return data
 ```
+
+**Key Change**: Instead of fetching ALL players, we now only fetch and cache players that are actually on rosters.
 
 ## Cache TTL Strategy
 
@@ -44,11 +61,16 @@ If Cache Miss → Fetch from Sleeper API → Cache in DynamoDB → Return Data
 - **TTL**: 1 year
 - **Usage**: `const byeWeeks = await getNflByeWeeksWithCache(2025);`
 
-#### `getAllPlayersWithCache(sport = 'nfl')`
-- **Purpose**: Get all NFL players with caching
-- **Cache Strategy**: DynamoDB first, Sleeper API fallback
-- **TTL**: 24 hours
-- **Usage**: `const players = await getAllPlayersWithCache('nfl');`
+#### `getPlayersFromCacheOrFetch(playerIds, sport = 'nfl')`
+- **Purpose**: Get specific players with roster-based caching (**MAIN FUNCTION**)
+- **Cache Strategy**: Check cache for each player, fetch only missing ones from Sleeper API
+- **TTL**: 24 hours  
+- **Usage**: `const players = await getPlayersFromCacheOrFetch(['player1', 'player2'], 'nfl');`
+- **Benefits**: Only caches players that are actually needed
+
+#### `fetchAndCacheRosterPlayers(playerIds, sport = 'nfl')`
+- **Purpose**: Fetch specific players and add them to cache
+- **Usage**: Internal function used by getPlayersFromCacheOrFetch
 
 #### `refreshNflPlayersCache(sport = 'nfl')`
 - **Purpose**: Force refresh of player cache
@@ -112,11 +134,9 @@ Force refreshes both caches:
 
 ### In Roster Analysis
 ```javascript
-// Before (direct API call)
-const players = await getAllPlayers('nfl');
-
-// After (cached)
-const players = await getAllPlayersWithCache('nfl');
+// NEW: Only fetches roster players
+const allRosterPlayerIds = collectPlayerIdsFromRosters(rosters);
+const players = await getPlayersFromCacheOrFetch(allRosterPlayerIds, 'nfl');
 const byeWeeks = await getNflByeWeeksWithCache(currentSeason);
 ```
 
@@ -133,10 +153,12 @@ await refreshNflByeWeeksCache(2025);
 ## Benefits
 
 1. **Performance**: Reduced API calls to Sleeper, faster response times
-2. **Reliability**: Fallback mechanisms ensure data availability
-3. **Cost**: Reduced external API usage
-4. **Monitoring**: Built-in cache status and management commands
-5. **Flexibility**: Easy to adjust TTL and refresh strategies
+2. **Efficiency**: Only cache players that are actually on rosters (~99% cache size reduction)
+3. **Cost**: Significantly reduced DynamoDB storage costs  
+4. **Reliability**: Fallback mechanisms ensure data availability
+5. **Monitoring**: Built-in cache status and management commands
+6. **Flexibility**: Easy to adjust TTL and refresh strategies
+7. **Organic Growth**: Cache grows naturally with roster changes
 
 ## Monitoring
 

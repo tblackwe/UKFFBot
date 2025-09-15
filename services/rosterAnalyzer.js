@@ -1,5 +1,5 @@
 const { getLeagueRosters, getLeagueUsers, getNflState, getLeague } = require('./sleeper.js');
-const { getNflByeWeeksWithCache, getAllPlayersWithCache, getNflScheduleWithCache, hasTeamPlayedThisWeek } = require('./nflDataCache.js');
+const { getNflByeWeeksWithCache, getPlayersFromCacheOrFetch, getNflScheduleWithCache, hasTeamPlayedThisWeek } = require('./nflDataCache.js');
 
 /**
  * Position mappings for fantasy relevance
@@ -38,11 +38,10 @@ async function analyzeLeagueRosters(leagueId) {
 
         console.log(`[ROSTER_ANALYZER] Analyzing league ${leagueId} for season ${currentSeason}, week ${currentWeek}`);
 
-        // Get league data and cached NFL data in parallel
-        const [rosters, users, allPlayers, byeWeeks, weekSchedule] = await Promise.all([
+        // Get league data and bye weeks/schedule data in parallel
+        const [rosters, users, byeWeeks, weekSchedule] = await Promise.all([
             getLeagueRosters(leagueId),
             getLeagueUsers(leagueId),
-            getAllPlayersWithCache('nfl'),
             getNflByeWeeksWithCache(currentSeason),
             getNflScheduleWithCache(currentSeason, currentWeek)
         ]);
@@ -59,9 +58,37 @@ async function analyzeLeagueRosters(leagueId) {
             console.log(`[ROSTER_ANALYZER] Detected guillotine league: ${league.name}`);
         }
 
+        // NEW APPROACH: Collect ALL unique player IDs from ALL rosters first
+        const allRosterPlayerIds = new Set();
+        
+        for (const roster of rosters) {
+            // Skip empty rosters in guillotine leagues (eliminated teams)
+            if (isGuillotineLeague && isEmptyRoster(roster)) {
+                continue;
+            }
+
+            // Collect all player IDs from this roster (both starters and bench)
+            const allRosterPlayers = [
+                ...(roster.starters || []),
+                ...(roster.players || [])
+            ];
+            
+            for (const playerId of allRosterPlayers) {
+                if (playerId && playerId !== '0' && playerId !== '') {
+                    allRosterPlayerIds.add(playerId);
+                }
+            }
+        }
+
+        console.log(`[ROSTER_ANALYZER] Found ${allRosterPlayerIds.size} unique players across all rosters`);
+
+        // Fetch ONLY the players that are on rosters (using new roster-based caching)
+        const allPlayers = await getPlayersFromCacheOrFetch(Array.from(allRosterPlayerIds), 'nfl');
+        console.log(`[ROSTER_ANALYZER] Retrieved ${Object.keys(allPlayers).length} players for analysis`);
+
         const rosterAnalysis = [];
 
-        // Analyze each roster
+        // Analyze each roster (now with only the players we actually need)
         for (const roster of rosters) {
             // Skip empty rosters in guillotine leagues (eliminated teams)
             if (isGuillotineLeague && isEmptyRoster(roster)) {

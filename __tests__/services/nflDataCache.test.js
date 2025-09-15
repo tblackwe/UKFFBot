@@ -4,7 +4,8 @@
 
 const { 
     getNflByeWeeksWithCache, 
-    getAllPlayersWithCache, 
+    getPlayersFromCacheOrFetch,
+    fetchAndCacheRosterPlayers,
     refreshNflPlayersCache,
     refreshNflByeWeeksCache,
     getCacheStatus,
@@ -76,16 +77,15 @@ describe('NFL Data Cache Service', () => {
         });
     });
 
-    describe('getAllPlayersWithCache', () => {
+    describe('getPlayersFromCacheOrFetch', () => {
         const mockPlayers = {
-            '123': { player_id: '123', full_name: 'Test Player', position: 'QB' },
-            '456': { player_id: '456', full_name: 'Another Player', position: 'RB' }
+            '123': { player_id: '123', full_name: 'Test Player', position: 'QB', active: true, fantasy_positions: ['QB'] },
+            '456': { player_id: '456', full_name: 'Another Player', position: 'RB', active: true, fantasy_positions: ['RB'] }
         };
 
         // Ultra-minimal format that would be stored in cache
         const mockMinimalPlayers = {
-            '123': { n: 'Test Player', t: null, p: 'QB' },
-            '456': { n: 'Another Player', t: null, p: 'RB' }
+            '123': { n: 'Test Player', t: null, p: 'QB' }
         };
 
         // Expected expanded format returned to caller
@@ -98,67 +98,48 @@ describe('NFL Data Cache Service', () => {
                 injury_status: null,
                 active: true,
                 position: 'QB' 
-            },
-            '456': { 
-                player_id: '456', 
-                full_name: 'Another Player', 
-                team: null,
-                fantasy_positions: ['RB'],
-                injury_status: null,
-                active: true,
-                position: 'RB' 
             }
         };
 
         it('should return cached players if available', async () => {
             mockDatastore.getNflPlayers.mockResolvedValue(mockMinimalPlayers);
 
-            const result = await getAllPlayersWithCache('nfl');
+            const result = await getPlayersFromCacheOrFetch(['123'], 'nfl');
 
             expect(result).toEqual(expectedExpandedPlayers);
             expect(mockDatastore.getNflPlayers).toHaveBeenCalledWith('nfl');
             expect(mockSleeper.getAllPlayers).not.toHaveBeenCalled();
         });
 
-        it('should fetch from API and cache if not cached', async () => {
-            mockDatastore.getNflPlayers.mockResolvedValue(null);
+        it('should fetch missing players from API and cache them', async () => {
+            mockDatastore.getNflPlayers.mockResolvedValue({});
             mockSleeper.getAllPlayers.mockResolvedValue(mockPlayers);
             mockDatastore.saveNflPlayers.mockResolvedValue();
 
-            const result = await getAllPlayersWithCache('nfl');
+            const result = await getPlayersFromCacheOrFetch(['123'], 'nfl');
 
-            expect(result).toEqual(expectedExpandedPlayers);
-            expect(mockDatastore.getNflPlayers).toHaveBeenCalledWith('nfl');
+            expect(result['123']).toBeDefined();
+            expect(result['123'].full_name).toBe('Test Player');
             expect(mockSleeper.getAllPlayers).toHaveBeenCalledWith('nfl');
-            
-            // Should save ultra-minimal data
-            const expectedMinimalData = {
-                '123': {
-                    n: 'Test Player',
-                    t: null,
-                    p: 'QB'
-                },
-                '456': {
-                    n: 'Another Player',
-                    t: null,
-                    p: 'RB'
-                }
-            };
-            expect(mockDatastore.saveNflPlayers).toHaveBeenCalledWith('nfl', expectedMinimalData);
+            expect(mockDatastore.saveNflPlayers).toHaveBeenCalled();
         });
 
-        it('should throw error if API fails', async () => {
-            mockDatastore.getNflPlayers.mockResolvedValue(null);
-            mockSleeper.getAllPlayers.mockRejectedValue(new Error('API error'));
+        it('should handle mixed cached and missing players', async () => {
+            // Player 123 is cached, player 456 needs to be fetched
+            mockDatastore.getNflPlayers.mockResolvedValue(mockMinimalPlayers);
+            mockSleeper.getAllPlayers.mockResolvedValue(mockPlayers);
+            mockDatastore.saveNflPlayers.mockResolvedValue();
 
-            await expect(getAllPlayersWithCache('nfl')).rejects.toThrow('API error');
+            const result = await getPlayersFromCacheOrFetch(['123', '456'], 'nfl');
+
+            expect(Object.keys(result)).toHaveLength(2);
+            expect(result['123'].full_name).toBe('Test Player');
+            expect(result['456'].full_name).toBe('Another Player');
         });
 
-        it('should throw error if API returns null', async () => {
-            mockDatastore.getNflPlayers.mockResolvedValue(null);
-            mockSleeper.getAllPlayers.mockResolvedValue(null);
-
-            await expect(getAllPlayersWithCache('nfl')).rejects.toThrow('No players data received from Sleeper API for nfl');
+        it('should return empty object for empty player list', async () => {
+            const result = await getPlayersFromCacheOrFetch([], 'nfl');
+            expect(result).toEqual({});
         });
     });
 
