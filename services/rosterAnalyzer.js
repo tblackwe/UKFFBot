@@ -1,10 +1,6 @@
 const { getLeagueRosters, getLeagueUsers, getNflState, getLeague } = require('./sleeper.js');
 const { getNflByeWeeksWithCache, getPlayersFromCacheOrFetch, getNflScheduleWithCache, hasTeamPlayedThisWeek } = require('./nflDataCache.js');
 
-/**
- * Position mappings for fantasy relevance
- */
-const FANTASY_POSITIONS = ['QB', 'RB', 'WR', 'TE', 'K', 'DEF'];
 
 /**
  * Injury status mappings - only serious injuries that should be flagged
