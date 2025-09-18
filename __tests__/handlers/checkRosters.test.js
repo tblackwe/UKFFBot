@@ -26,7 +26,15 @@ describe('checkRosters handler', () => {
         await handleCheckRostersCommand({ command, say: mockSay });
 
         expect(mockSay).toHaveBeenCalledWith({
-            text: expect.stringContaining('No leagues are registered to this channel'),
+            text: '📭 No leagues are registered to this channel. Use @UKFFBot register league [league_id] first to register a Sleeper league.',
+            blocks: expect.arrayContaining([
+                expect.objectContaining({
+                    type: "section",
+                    text: expect.objectContaining({
+                        text: expect.stringContaining('📭 *No leagues are registered to this channel.*')
+                    })
+                })
+            ]),
             thread_ts: '1234567890.123456'
         });
     });
@@ -57,14 +65,23 @@ describe('checkRosters handler', () => {
 
         expect(getLeaguesByChannel).toHaveBeenCalledWith('C1234567890');
         expect(analyzeLeagueRosters).toHaveBeenCalledWith('123456789');
+        
+        // Check for the initial "Analyzing rosters" message
         expect(mockSay).toHaveBeenCalledWith({
-            text: expect.stringContaining('Analyzing rosters'),
+            text: '🔍 Analyzing rosters for issues... This may take a moment.',
+            blocks: expect.arrayContaining([
+                expect.objectContaining({
+                    type: "section",
+                    text: expect.objectContaining({
+                        text: expect.stringContaining('🔍 *Analyzing rosters for issues...*')
+                    })
+                })
+            ]),
             thread_ts: '1234567890.123456'
         });
-        expect(mockSay).toHaveBeenCalledWith({
-            text: expect.stringContaining('Test League'),
-            thread_ts: '1234567890.123456'
-        });
+        
+        // Check that it calls say multiple times (initial message, analysis result, footer)
+        expect(mockSay).toHaveBeenCalledTimes(3);
     });
 
     test('should handle analysis errors gracefully', async () => {
@@ -84,8 +101,20 @@ describe('checkRosters handler', () => {
 
         await handleCheckRostersCommand({ command, say: mockSay });
 
+        // Should call say multiple times: initial message, error message, footer
+        expect(mockSay).toHaveBeenCalledTimes(3);
+        
+        // Check for error message in one of the calls
         expect(mockSay).toHaveBeenCalledWith({
-            text: expect.stringContaining('Failed to analyze league'),
+            text: '❌ Failed to analyze league "Test League": API Error',
+            blocks: expect.arrayContaining([
+                expect.objectContaining({
+                    type: "section",
+                    text: expect.objectContaining({
+                        text: expect.stringContaining('❌ *Failed to analyze league "Test League"*')
+                    })
+                })
+            ]),
             thread_ts: '1234567890.123456'
         });
     });

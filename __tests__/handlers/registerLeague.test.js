@@ -44,7 +44,15 @@ describe('registerLeague handler', () => {
         expect(getLeague).toHaveBeenCalledWith('123456789');
         expect(saveLeague).toHaveBeenCalledWith('123456789', 'C1234567890', mockLeagueData);
         expect(mockSay).toHaveBeenCalledWith({
-            text: expect.stringContaining('✅ Successfully registered league to this channel!'),
+            text: expect.stringContaining('Successfully registered league'),
+            blocks: expect.arrayContaining([
+                expect.objectContaining({
+                    type: "section",
+                    text: expect.objectContaining({
+                        text: expect.stringContaining('✅ *League Successfully Registered!*')
+                    })
+                })
+            ]),
             thread_ts: '1234567890.123456'
         });
     });
@@ -60,6 +68,14 @@ describe('registerLeague handler', () => {
 
         expect(mockSay).toHaveBeenCalledWith({
             text: 'League ID should be numeric. Please check the ID and try again.',
+            blocks: expect.arrayContaining([
+                expect.objectContaining({
+                    type: "section",
+                    text: expect.objectContaining({
+                        text: expect.stringContaining('❌ *Invalid League ID*')
+                    })
+                })
+            ]),
             thread_ts: '1234567890.123456'
         });
         expect(getLeague).not.toHaveBeenCalled();
@@ -78,7 +94,15 @@ describe('registerLeague handler', () => {
         await handleRegisterLeagueCommand({ command, say: mockSay });
 
         expect(mockSay).toHaveBeenCalledWith({
-            text: '❌ League with ID "999999999" not found. Please check the league ID and try again.',
+            text: 'League with ID "999999999" not found.',
+            blocks: expect.arrayContaining([
+                expect.objectContaining({
+                    type: "section",
+                    text: expect.objectContaining({
+                        text: expect.stringContaining('❌ *League Not Found*')
+                    })
+                })
+            ]),
             thread_ts: '1234567890.123456'
         });
         expect(saveLeague).not.toHaveBeenCalled();
@@ -101,7 +125,15 @@ describe('registerLeague handler', () => {
         await handleRegisterLeagueCommand({ command, say: mockSay });
 
         expect(mockSay).toHaveBeenCalledWith({
-            text: '⚠️ League "Existing League" (123456789) is already registered to this channel.',
+            text: 'League "Existing League" is already registered to this channel.',
+            blocks: expect.arrayContaining([
+                expect.objectContaining({
+                    type: "section",
+                    text: expect.objectContaining({
+                        text: expect.stringContaining('⚠️ *League Already Registered*')
+                    })
+                })
+            ]),
             thread_ts: '1234567890.123456'
         });
         expect(getLeague).not.toHaveBeenCalled();
