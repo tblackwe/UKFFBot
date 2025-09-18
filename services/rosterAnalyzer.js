@@ -93,7 +93,7 @@ async function analyzeLeagueRosters(leagueId) {
             }
 
             const owner = userMap[roster.owner_id];
-            const rosterIssues = analyzeRoster(roster, allPlayers, currentWeek, byeWeeks, weekSchedule);
+            const rosterIssues = analyzeRoster(roster, allPlayers, currentWeek, byeWeeks, weekSchedule, league.roster_positions);
             
             if (rosterIssues.hasIssues) {
                 rosterAnalysis.push({
@@ -135,9 +135,10 @@ async function analyzeLeagueRosters(leagueId) {
  * @param {number} currentWeek Current NFL week
  * @param {object} byeWeeks NFL bye weeks mapping for current season
  * @param {object[]} weekSchedule Array of game objects for the current week
+ * @param {string[]} rosterPositions Array of position names for each roster slot
  * @returns {object} Analysis of roster issues
  */
-function analyzeRoster(roster, allPlayers, currentWeek, byeWeeks, weekSchedule) {
+function analyzeRoster(roster, allPlayers, currentWeek, byeWeeks, weekSchedule, rosterPositions) {
     const issues = {
         startingByeWeekPlayers: [],
         startingInjuredPlayers: [],
@@ -156,7 +157,7 @@ function analyzeRoster(roster, allPlayers, currentWeek, byeWeeks, weekSchedule) 
         if (!playerId || playerId === '0' || playerId === '') {
             issues.emptyStartingSlots.push({
                 slotIndex: i + 1,
-                position: getPositionForSlot(i) // Helper function to determine position
+                position: getPositionForSlot(i, rosterPositions) // Helper function to determine position
             });
             continue;
         }
@@ -166,7 +167,7 @@ function analyzeRoster(roster, allPlayers, currentWeek, byeWeeks, weekSchedule) 
             // Player not found in database - treat as empty slot
             issues.emptyStartingSlots.push({
                 slotIndex: i + 1,
-                position: getPositionForSlot(i),
+                position: getPositionForSlot(i, rosterPositions),
                 issue: 'Player not found'
             });
             continue;
@@ -217,8 +218,13 @@ function analyzeRoster(roster, allPlayers, currentWeek, byeWeeks, weekSchedule) 
  * @param {number} slotIndex The index of the starting slot (0-based)
  * @returns {string} The likely position for this slot
  */
-function getPositionForSlot(slotIndex) {
-    // Common fantasy lineup order: QB, RB, RB, WR, WR, TE, FLEX, K, DEF
+function getPositionForSlot(slotIndex, rosterPositions) {
+    // Use the league's actual roster positions instead of hardcoded values
+    if (rosterPositions && rosterPositions.length > 0) {
+        return rosterPositions[slotIndex] || `Slot ${slotIndex + 1}`;
+    }
+    
+    // Fallback to common positions if roster positions not available
     const commonPositions = ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DEF'];
     return commonPositions[slotIndex] || `Slot ${slotIndex + 1}`;
 }

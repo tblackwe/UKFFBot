@@ -67,6 +67,8 @@ describe('rosterAnalyzer', () => {
     });
 
     describe('analyzeRoster', () => {
+        const mockRosterPositions = ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DEF'];
+        
         const mockPlayers = {
             'player1': {
                 first_name: 'Test',
@@ -97,7 +99,7 @@ describe('rosterAnalyzer', () => {
                 players: ['player1', 'player2', 'player3']
             };
 
-            const result = analyzeRoster(roster, mockPlayers, 5, NFL_BYE_WEEKS_2025); // Week 5
+            const result = analyzeRoster(roster, mockPlayers, 5, NFL_BYE_WEEKS_2025, [], mockRosterPositions); // Week 5
 
             expect(result.hasIssues).toBe(true);
             expect(result.startingByeWeekPlayers).toHaveLength(1);
@@ -111,7 +113,7 @@ describe('rosterAnalyzer', () => {
                 players: ['player1', 'player2', 'player3']
             };
 
-            const result = analyzeRoster(roster, mockPlayers, 1, NFL_BYE_WEEKS_2025); // Week 1
+            const result = analyzeRoster(roster, mockPlayers, 1, NFL_BYE_WEEKS_2025, [], mockRosterPositions); // Week 1
 
             expect(result.hasIssues).toBe(true);
             expect(result.startingInjuredPlayers).toHaveLength(1);
@@ -125,7 +127,7 @@ describe('rosterAnalyzer', () => {
                 players: ['player1']
             };
 
-            const result = analyzeRoster(roster, mockPlayers, 1, NFL_BYE_WEEKS_2025);
+            const result = analyzeRoster(roster, mockPlayers, 1, NFL_BYE_WEEKS_2025, [], mockRosterPositions);
 
             expect(result.hasIssues).toBe(true);
             expect(result.emptyStartingSlots).toHaveLength(2);
@@ -139,7 +141,7 @@ describe('rosterAnalyzer', () => {
                 players: ['player1', 'player2', 'player3'] // player1 and player3 on bench with bye
             };
 
-            const result = analyzeRoster(roster, mockPlayers, 5, NFL_BYE_WEEKS_2025); // Week 5
+            const result = analyzeRoster(roster, mockPlayers, 5, NFL_BYE_WEEKS_2025, [], mockRosterPositions); // Week 5
 
             // Should only flag starting injured player, not bench bye week players
             expect(result.hasIssues).toBe(true);
@@ -228,7 +230,21 @@ describe('rosterAnalyzer', () => {
     });
 
     describe('getPositionForSlot', () => {
-        test('should return correct positions for common slots', () => {
+        test('should return correct positions using league roster positions', () => {
+            const rosterPositions = ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'FLEX', 'FLEX'];
+            
+            expect(getPositionForSlot(0, rosterPositions)).toBe('QB');
+            expect(getPositionForSlot(1, rosterPositions)).toBe('RB');
+            expect(getPositionForSlot(2, rosterPositions)).toBe('RB');
+            expect(getPositionForSlot(3, rosterPositions)).toBe('WR');
+            expect(getPositionForSlot(4, rosterPositions)).toBe('WR');
+            expect(getPositionForSlot(5, rosterPositions)).toBe('TE');
+            expect(getPositionForSlot(6, rosterPositions)).toBe('FLEX');
+            expect(getPositionForSlot(7, rosterPositions)).toBe('FLEX');
+            expect(getPositionForSlot(8, rosterPositions)).toBe('FLEX');
+        });
+
+        test('should fallback to common positions when roster positions not provided', () => {
             expect(getPositionForSlot(0)).toBe('QB');
             expect(getPositionForSlot(1)).toBe('RB');
             expect(getPositionForSlot(2)).toBe('RB');
@@ -240,9 +256,27 @@ describe('rosterAnalyzer', () => {
             expect(getPositionForSlot(8)).toBe('DEF');
         });
 
-        test('should handle slots beyond common positions', () => {
+        test('should handle slots beyond roster positions', () => {
+            const rosterPositions = ['QB', 'RB', 'WR'];
+            expect(getPositionForSlot(5, rosterPositions)).toBe('Slot 6'); // Index 5 is beyond the 3-element array
             expect(getPositionForSlot(10)).toBe('Slot 11');
             expect(getPositionForSlot(15)).toBe('Slot 16');
+        });
+
+        test('should handle different league configurations', () => {
+            // Traditional league with K and DEF
+            const traditionalRoster = ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'K', 'DEF'];
+            expect(getPositionForSlot(7, traditionalRoster)).toBe('K');
+            expect(getPositionForSlot(8, traditionalRoster)).toBe('DEF');
+
+            // Superflex league
+            const superflexRoster = ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'SUPERFLEX', 'DEF'];
+            expect(getPositionForSlot(7, superflexRoster)).toBe('SUPERFLEX');
+            
+            // No kicker league (like the bug case)
+            const noKickerRoster = ['QB', 'RB', 'RB', 'WR', 'WR', 'TE', 'FLEX', 'FLEX', 'FLEX'];
+            expect(getPositionForSlot(7, noKickerRoster)).toBe('FLEX');
+            expect(getPositionForSlot(8, noKickerRoster)).toBe('FLEX');
         });
     });
 
