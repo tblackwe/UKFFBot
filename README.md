@@ -140,7 +140,33 @@ Run the test suite:
 npm test
 ```
 
-## 📖 Usage
+## � Utilities
+
+### Update NFL Bye Weeks
+
+Fetch and update NFL bye weeks for any season using the ESPN API:
+
+```bash
+node update-bye-weeks.js [season]
+```
+
+**Examples:**
+```bash
+node update-bye-weeks.js 2025    # Fetch 2025 season bye weeks
+node update-bye-weeks.js 2026    # Fetch 2026 season bye weeks
+node update-bye-weeks.js         # Defaults to 2025
+```
+
+**Features:**
+- Fetches official bye week data from ESPN API
+- Automatically maps team abbreviations to Sleeper format (WSH → WAS)
+- Validates all 32 NFL teams are included
+- Outputs JavaScript object ready to copy into `services/nflDataCache.js`
+- Provides step-by-step update instructions
+
+**Output:** The script generates the correct `NFL_BYE_WEEKS_XXXX` object that you can copy directly into the code and clear the cache to use the updated data.
+
+## �📖 Usage
 
 Once deployed, interact with the bot in Slack:
 
