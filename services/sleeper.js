@@ -64,7 +64,7 @@ const getTradedPicks = (draftId) => {
  * See: https://docs.sleeper.com/#get-all-drafts-for-a-user
  * @param {string} userId The ID of the user.
  * @param {string} sport The sport (e.g., 'nfl').
- * @param {string} season The season year (e.g., '2024').
+ * @param {string} season The season year (e.g., '2025').
  * @returns {Promise<object[]>} An array of draft objects.
  */
 const getUserDrafts = (userId, sport, season) => {
@@ -132,12 +132,13 @@ const getNflState = () => {
 
 /**
  * Maps Sleeper team abbreviations to ESPN team abbreviations.
+ * Sleeper uses 'WAS' for Washington, but ESPN schedule API uses 'WSH'.
  * @param {string} sleeperTeam The team abbreviation from Sleeper.
  * @returns {string} The corresponding ESPN team abbreviation.
  */
 function mapSleeperToEspnTeam(sleeperTeam) {
     const teamMap = {
-        'WAS': 'WSH',  // Washington
+        'WAS': 'WSH',  // Washington: Sleeper uses WAS, ESPN uses WSH
         // Add other mappings if needed
     };
     return teamMap[sleeperTeam] || sleeperTeam;
@@ -212,4 +213,5 @@ module.exports = {
     getAllPlayers,
     getNflState,
     getNflSchedule,
+    mapSleeperToEspnTeam,
 };

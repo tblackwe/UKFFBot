@@ -13,26 +13,28 @@ const { getAllPlayers: sleeperGetAllPlayers, getNflState } = require('./sleeper.
 
 /**
  * NFL teams and their bye weeks for 2025 season
- * This is the source of truth for bye weeks - can be updated manually
- * or potentially fetched from an external source in the future
+ * Data sourced from ESPN API: https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/2025/types/2/weeks/{week}
+ * Updated: 2025-10-03 - Corrected bye weeks using official ESPN data
  */
 const NFL_BYE_WEEKS_2025 = {
     // Week 5 byes
-    'DET': 5, 'LAC': 5, 'PHI': 5, 'TEN': 5,
-    // Week 6 byes  
-    'KC': 6, 'LAR': 6, 'MIA': 6, 'MIN': 6,
+    'ATL': 5, 'CHI': 5, 'GB': 5, 'PIT': 5,
+    // Week 6 byes
+    'HOU': 6, 'MIN': 6,
     // Week 7 byes
-    'CHI': 7, 'DAL': 7,
+    'BAL': 7, 'BUF': 7,
+    // Week 8 byes
+    'ARI': 8, 'DET': 8, 'JAX': 8, 'LAR': 8, 'LV': 8, 'SEA': 8,
     // Week 9 byes
-    'CLE': 9, 'GB': 9, 'LV': 9, 'SEA': 9,
+    'CLE': 9, 'NYJ': 9, 'PHI': 9, 'TB': 9,
     // Week 10 byes
-    'ATL': 10, 'DEN': 10, 'IND': 10, 'NE': 10,
+    'CIN': 10, 'DAL': 10, 'KC': 10, 'TEN': 10,
     // Week 11 byes
-    'BAL': 11, 'HOU': 11, 'WAS': 11, 'NYJ': 11,
+    'IND': 11, 'NO': 11,
     // Week 12 byes
-    'ARI': 12, 'CAR': 12, 'NYG': 12, 'TB': 12,
+    'DEN': 12, 'LAC': 12, 'MIA': 12, 'WAS': 12,
     // Week 14 byes
-    'BUF': 14, 'CIN': 14, 'JAX': 14, 'NO': 14, 'PIT': 14, 'SF': 14
+    'CAR': 14, 'NE': 14, 'NYG': 14, 'SF': 14
 };
 
 /**
@@ -336,12 +338,13 @@ async function getNflScheduleWithCache(season, week) {
 
 /**
  * Maps Sleeper team abbreviations to ESPN team abbreviations.
+ * Sleeper uses 'WAS' for Washington, but ESPN schedule API uses 'WSH'.
  * @param {string} sleeperTeam The team abbreviation from Sleeper.
  * @returns {string} The corresponding ESPN team abbreviation.
  */
 function mapSleeperToEspnTeam(sleeperTeam) {
     const teamMap = {
-        'WAS': 'WSH',  // Washington
+        'WAS': 'WSH',  // Washington: Sleeper uses WAS, ESPN uses WSH
         // Add other mappings if needed
     };
     return teamMap[sleeperTeam] || sleeperTeam;
