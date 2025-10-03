@@ -1,16 +1,20 @@
 const { handleLastPickCommand } = require('../handlers/lastpick.js');
 const { handleRegisterDraftCommand } = require('../handlers/registerDraft.js');
 const { handleRegisterPlayerCommand } = require('../handlers/registerPlayer.js');
+const { handleRegisterLeagueCommand } = require('../handlers/registerLeague.js');
 const { handleUsageCommand } = require('../handlers/handleUsageCommand.js');
 const { handleUnregisterDraftCommand } = require('../handlers/unregisterDraft.js');
 const { handleListDraftsCommand } = require('../handlers/listDrafts.js');
+const { handleListLeaguesCommand } = require('../handlers/listLeagues.js');
 const { handleUpdatePlayersCommand } = require('../handlers/updatePlayers.js');
+const { handleCheckRostersCommand, handleCheckLeagueRostersCommand } = require('../handlers/checkRosters.js');
+const { handleCacheStatusCommand, handleCacheRefreshCommand } = require('../handlers/cacheManagement.js');
 
 /**
  * Creates a command payload object for consistency across handlers
  */
-function createCommandPayload(remainingText, channelId) {
-  return { text: remainingText, channel_id: channelId };
+function createCommandPayload(remainingText, channelId, ts = null) {
+  return { text: remainingText, channel_id: channelId, ts: ts };
 }
 
 /**
@@ -33,6 +37,13 @@ function createCommandPatterns(event, say, client = null) {
       }
     },
     { 
+      pattern: /^register\sleague(.+)$/i, 
+      handler: (remainingText) => {
+        const commandPayload = createCommandPayload(remainingText, event.channel, event.ts);
+        return handleRegisterLeagueCommand({ command: commandPayload, say });
+      }
+    },
+    { 
       pattern: /^register\splayer(.+)$/i, 
       handler: (remainingText) => {
         const commandPayload = createCommandPayload(remainingText, event.channel);
@@ -41,7 +52,10 @@ function createCommandPatterns(event, say, client = null) {
     },
     { 
       pattern: /^(usage|help)$/i, 
-      handler: () => handleUsageCommand({ say })
+      handler: () => {
+        const commandPayload = createCommandPayload('', event.channel, event.ts);
+        return handleUsageCommand({ command: commandPayload, say });
+      }
     },
     { 
       pattern: /^unregister\sdraft(.+)$/i, 
@@ -57,6 +71,51 @@ function createCommandPatterns(event, say, client = null) {
     { 
       pattern: /^list\sdrafts$/i, 
       handler: () => say("For security, the `list drafts` command can only be used in a direct message with me.")
+    },
+    { 
+      pattern: /^list\sleagues$/i, 
+      handler: () => {
+        const commandPayload = createCommandPayload('', event.channel, event.ts);
+        return handleListLeaguesCommand({ command: commandPayload, say });
+      }
+    },
+    { 
+      pattern: /^check\srosters$/i, 
+      handler: () => {
+        const commandPayload = createCommandPayload('', event.channel, event.ts);
+        return handleCheckRostersCommand({ command: commandPayload, say });
+      }
+    },
+    { 
+      pattern: /^check\sleague\srosters(.+)$/i, 
+      handler: (remainingText) => {
+        const commandPayload = createCommandPayload(remainingText, event.channel, event.ts);
+        return handleCheckLeagueRostersCommand({ command: commandPayload, say });
+      }
+    },
+    { 
+      pattern: /^cache\sstatus$/i, 
+      handler: () => {
+        const params = { 
+          ack: async () => {},
+          respond: say,
+          command: createCommandPayload('', event.channel),
+          client
+        };
+        return handleCacheStatusCommand(params);
+      }
+    },
+    { 
+      pattern: /^cache\srefresh$/i, 
+      handler: () => {
+        const params = { 
+          ack: async () => {},
+          respond: say,
+          command: createCommandPayload('', event.channel),
+          client
+        };
+        return handleCacheRefreshCommand(params);
+      }
     }
   ];
 }
@@ -71,7 +130,8 @@ async function handleAppMention({ event, say, logger, client }) {
 
     // If no text after mention, show help
     if (!text) {
-      await handleUsageCommand({ say });
+      const commandPayload = createCommandPayload('', event.channel, event.ts);
+      await handleUsageCommand({ command: commandPayload, say });
       return;
     }
 
@@ -97,7 +157,8 @@ async function handleAppMention({ event, say, logger, client }) {
       // Extract first word/phrase for error message
       const firstWord = text.split(/\s+/)[0] || text;
       await say(`Sorry, I don't understand the command \`${firstWord}\`.`);
-      await handleUsageCommand({ say });
+      const commandPayload = createCommandPayload('', event.channel, event.ts);
+      await handleUsageCommand({ command: commandPayload, say });
     }
   } catch (error) {
     logger.error("Error processing app_mention:", error);

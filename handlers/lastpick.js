@@ -148,7 +148,8 @@ async function generatePickMessagePayload(draft, picks, data, notifyNextPicker =
  * @param {object} payload.command The command object.
  * @param {function} payload.say The function to send a message.
  */
-const handleLastPickCommand = async ({ command, say }) => {
+const handleLastPickCommand = async ({ command, say, ack }) => {
+  if (ack) await ack();
   let data;
   try {
     data = await getData();

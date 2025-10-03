@@ -119,6 +119,52 @@ Resources:
                 - logs:PutLogEvents
               Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
 
+  # Roster Scheduler Lambda Function
+  RosterSchedulerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub 'ukff-roster-scheduler-${Environment}'
+      CodeUri: ./
+      Handler: lambda-roster-scheduler.handler
+      Description: 'UKFF Roster Scheduler - Automatically checks rosters on scheduled days'
+      Timeout: 300
+      Environment:
+        Variables:
+          NODE_ENV: production
+      Events:
+        # Thursday at 5 PM (17:00 PM UTC)
+        ThursdayNoonSchedule:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 17 ? * THU *)
+            Description: 'Check rosters every Thursday at 5 PM'
+            Enabled: true
+        # Sunday at 11 AM (11:00 AM UTC)
+        SundayMorningSchedule:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 11 ? * SUN *)
+            Description: 'Check rosters every Sunday at 11 AM'
+            Enabled: true
+        # Monday at 5 PM (17:00 PM UTC)
+        MondayNoonSchedule:
+          Type: Schedule
+          Properties:
+            Schedule: cron(0 17 ? * MON *)
+            Description: 'Check rosters every Monday at 5 PM'
+            Enabled: true
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref UKFFBotTable
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resource: !Sub 'arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*'
+
   # API Gateway for Slack Events
   SlackBotApi:
     Type: AWS::Serverless::Api
@@ -152,6 +198,12 @@ Resources:
       LogGroupName: !Sub '/aws/lambda/ukff-draft-monitor-${Environment}'
       RetentionInDays: 14
 
+  RosterSchedulerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub '/aws/lambda/ukff-roster-scheduler-${Environment}'
+      RetentionInDays: 14
+
   # CloudWatch Dashboard
   UKFFBotDashboard:
     Type: AWS::CloudWatch::Dashboard
@@ -164,7 +216,7 @@ Resources:
               "type": "metric",
               "x": 0,
               "y": 0,
-              "width": 12,
+              "width": 8,
               "height": 6,
               "properties": {
                 "metrics": [
@@ -180,9 +232,9 @@ Resources:
             },
             {
               "type": "metric",
-              "x": 12,
+              "x": 8,
               "y": 0,
-              "width": 12,
+              "width": 8,
               "height": 6,
               "properties": {
                 "metrics": [
@@ -194,6 +246,24 @@ Resources:
                 "stat": "Sum",
                 "region": "${AWS::Region}",
                 "title": "Draft Monitor Lambda Metrics"
+              }
+            },
+            {
+              "type": "metric",
+              "x": 16,
+              "y": 0,
+              "width": 8,
+              "height": 6,
+              "properties": {
+                "metrics": [
+                  [ "AWS/Lambda", "Invocations", "FunctionName", "${RosterSchedulerFunction}" ],
+                  [ ".", "Errors", ".", "." ],
+                  [ ".", "Duration", ".", "." ]
+                ],
+                "period": 300,
+                "stat": "Sum",
+                "region": "${AWS::Region}",
+                "title": "Roster Scheduler Lambda Metrics"
               }
             }
           ]
@@ -223,3 +293,9 @@ Outputs:
     Value: !GetAtt DraftMonitorFunction.Arn
     Export:
       Name: !Sub '${AWS::StackName}-DraftMonitorFunctionArn'
+
+  RosterSchedulerFunctionArn:
+    Description: 'Roster Scheduler Lambda Function ARN'
+    Value: !GetAtt RosterSchedulerFunction.Arn
+    Export:
+      Name: !Sub '${AWS::StackName}-RosterSchedulerFunctionArn'

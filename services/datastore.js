@@ -1,5 +1,5 @@
 const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
-const { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
+const { DynamoDBDocumentClient, GetCommand, PutCommand, QueryCommand, ScanCommand, DeleteCommand } = require('@aws-sdk/lib-dynamodb');
 
 // Initialize DynamoDB client
 const client = new DynamoDBClient({
@@ -328,6 +328,409 @@ async function getAllPlayers() {
     }
 }
 
+/**
+ * Save a league registration to DynamoDB.
+ * @param {string} leagueId The Sleeper league ID.
+ * @param {string} channelId The Slack channel ID.
+ * @param {object} leagueData Additional league data from Sleeper API.
+ * @returns {Promise<void>}
+ * @throws {Error} if the league cannot be saved.
+ */
+async function saveLeague(leagueId, channelId, leagueData) {
+    try {
+        const putCommand = new PutCommand({
+            TableName: TABLE_NAME,
+            Item: {
+                PK: 'LEAGUE',
+                SK: `LEAGUE#${leagueId}`,
+                leagueId: leagueId,
+                slackChannelId: channelId,
+                leagueName: leagueData.name,
+                season: leagueData.season,
+                sport: leagueData.sport,
+                totalRosters: leagueData.total_rosters,
+                status: leagueData.status,
+                registeredAt: new Date().toISOString()
+            }
+        });
+        
+        await docClient.send(putCommand);
+    } catch (error) {
+        console.error("Error saving league to DynamoDB:", error);
+        throw error;
+    }
+}
+
+/**
+ * Get a league by league ID from DynamoDB.
+ * @param {string} leagueId The Sleeper league ID.
+ * @returns {Promise<object|null>} The league object or null if not found.
+ * @throws {Error} if the league cannot be retrieved.
+ */
+async function getLeague(leagueId) {
+    try {
+        const getCommand = new GetCommand({
+            TableName: TABLE_NAME,
+            Key: {
+                PK: 'LEAGUE',
+                SK: `LEAGUE#${leagueId}`
+            }
+        });
+        
+        const response = await docClient.send(getCommand);
+        return response.Item || null;
+    } catch (error) {
+        console.error("Error getting league from DynamoDB:", error);
+        throw error;
+    }
+}
+
+/**
+ * Get leagues by channel ID from DynamoDB.
+ * @param {string} channelId The Slack channel ID.
+ * @returns {Promise<object[]>} Array of league objects registered to the channel.
+ * @throws {Error} if the leagues cannot be retrieved.
+ */
+async function getLeaguesByChannel(channelId) {
+    try {
+        const scanCommand = new ScanCommand({
+            TableName: TABLE_NAME,
+            FilterExpression: 'PK = :pk AND slackChannelId = :channelId',
+            ExpressionAttributeValues: {
+                ':pk': 'LEAGUE',
+                ':channelId': channelId
+            }
+        });
+        
+        const response = await docClient.send(scanCommand);
+        return response.Items || [];
+    } catch (error) {
+        console.error("Error getting leagues by channel from DynamoDB:", error);
+        throw error;
+    }
+}
+
+/**
+ * Get all channels that have registered leagues, grouped by channel.
+ * @returns {Promise<object[]>} Array of objects with channelId and leagues array.
+ * @throws {Error} if the data cannot be retrieved.
+ */
+async function getAllChannelsWithLeagues() {
+    try {
+        const scanCommand = new ScanCommand({
+            TableName: TABLE_NAME,
+            FilterExpression: 'PK = :pk',
+            ExpressionAttributeValues: {
+                ':pk': 'LEAGUE'
+            }
+        });
+        
+        const response = await docClient.send(scanCommand);
+        const leagues = response.Items || [];
+        
+        // Group leagues by channel ID
+        const channelMap = new Map();
+        
+        leagues.forEach(league => {
+            const channelId = league.slackChannelId;
+            if (!channelMap.has(channelId)) {
+                channelMap.set(channelId, []);
+            }
+            channelMap.get(channelId).push(league);
+        });
+        
+        // Convert map to array format
+        return Array.from(channelMap.entries()).map(([channelId, leagues]) => ({
+            channelId,
+            leagues
+        }));
+        
+    } catch (error) {
+        console.error("Error getting all channels with leagues from DynamoDB:", error);
+        throw error;
+    }
+}
+
+/**
+ * Save NFL bye weeks data to DynamoDB cache.
+ * @param {number} season The NFL season year (e.g., 2025).
+ * @param {object} byeWeeks Object mapping team abbreviations to bye week numbers.
+ * @returns {Promise<void>}
+ * @throws {Error} if the bye weeks cannot be saved.
+ */
+async function saveNflByeWeeks(season, byeWeeks) {
+    try {
+        const putCommand = new PutCommand({
+            TableName: TABLE_NAME,
+            Item: {
+                PK: 'NFL_CACHE',
+                SK: `BYE_WEEKS#${season}`,
+                season: season,
+                byeWeeks: byeWeeks,
+                cachedAt: new Date().toISOString(),
+                // Cache expires after 1 year (season ends)
+                expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+            }
+        });
+        
+        await docClient.send(putCommand);
+    } catch (error) {
+        console.error("Error saving NFL bye weeks to DynamoDB:", error);
+        throw error;
+    }
+}
+
+/**
+ * Get NFL bye weeks data from DynamoDB cache.
+ * @param {number} season The NFL season year (e.g., 2025).
+ * @returns {Promise<object|null>} The bye weeks object or null if not found/expired.
+ * @throws {Error} if the bye weeks cannot be retrieved.
+ */
+async function getNflByeWeeks(season) {
+    try {
+        const getCommand = new GetCommand({
+            TableName: TABLE_NAME,
+            Key: {
+                PK: 'NFL_CACHE',
+                SK: `BYE_WEEKS#${season}`
+            }
+        });
+        
+        const response = await docClient.send(getCommand);
+        if (!response.Item) {
+            return null;
+        }
+        
+        // Check if cache has expired
+        const expiresAt = new Date(response.Item.expiresAt);
+        if (expiresAt < new Date()) {
+            return null;
+        }
+        
+        return response.Item.byeWeeks;
+    } catch (error) {
+        console.error("Error getting NFL bye weeks from DynamoDB:", error);
+        throw error;
+    }
+}
+
+/**
+ * Save NFL schedule data to DynamoDB cache.
+ * @param {number} season The NFL season year (e.g., 2025).
+ * @param {number} week The NFL week number.
+ * @param {object[]} games Array of game objects for the week.
+ * @returns {Promise<void>}
+ * @throws {Error} if the schedule cannot be saved.
+ */
+async function saveNflSchedule(season, week, games) {
+    try {
+        const putCommand = new PutCommand({
+            TableName: TABLE_NAME,
+            Item: {
+                PK: 'NFL_CACHE',
+                SK: `SCHEDULE#${season}#${week}`,
+                season: season,
+                week: week,
+                games: games,
+                cachedAt: new Date().toISOString(),
+                // Schedule cache expires after 1 week (games complete and become stale)
+                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString()
+            }
+        });
+        
+        await docClient.send(putCommand);
+    } catch (error) {
+        console.error(`Error saving NFL schedule for ${season} week ${week} to DynamoDB:`, error);
+        throw error;
+    }
+}
+
+/**
+ * Get NFL schedule data from DynamoDB cache.
+ * @param {number} season The NFL season year (e.g., 2025).
+ * @param {number} week The NFL week number.
+ * @returns {Promise<object|null>} The schedule object or null if not found/expired.
+ * @throws {Error} if the schedule cannot be retrieved.
+ */
+async function getNflSchedule(season, week) {
+    try {
+        const getCommand = new GetCommand({
+            TableName: TABLE_NAME,
+            Key: {
+                PK: 'NFL_CACHE',
+                SK: `SCHEDULE#${season}#${week}`
+            }
+        });
+        
+        const response = await docClient.send(getCommand);
+        if (!response.Item) {
+            return null;
+        }
+        
+        // Check if cache has expired
+        const expiresAt = new Date(response.Item.expiresAt);
+        if (expiresAt < new Date()) {
+            return null;
+        }
+        
+        return {
+            season: response.Item.season,
+            week: response.Item.week,
+            games: response.Item.games,
+            cachedAt: response.Item.cachedAt
+        };
+    } catch (error) {
+        console.error(`Error getting NFL schedule for ${season} week ${week} from DynamoDB:`, error);
+        throw error;
+    }
+}
+
+/**
+ * Clean up old NFL players cache chunks.
+ * @param {string} sport The sport (e.g., 'nfl').
+ * @returns {Promise<void>}
+ */
+async function cleanupOldNflPlayersCache(sport = 'nfl') {
+    try {
+        console.log(`[DATASTORE] Cleaning up old cache entries for ${sport}`);
+        
+        // Query for all items with the players cache prefix
+        const queryCommand = new QueryCommand({
+            TableName: TABLE_NAME,
+            KeyConditionExpression: 'PK = :pk AND begins_with(SK, :sk)',
+            ExpressionAttributeValues: {
+                ':pk': 'NFL_CACHE',
+                ':sk': `PLAYERS#${sport.toUpperCase()}`
+            }
+        });
+        
+        const response = await docClient.send(queryCommand);
+        
+        if (response.Items && response.Items.length > 0) {
+            console.log(`[DATASTORE] Found ${response.Items.length} old cache items to delete`);
+            
+            // Delete all old cache items
+            const deletePromises = response.Items.map(item => {
+                const deleteCommand = new DeleteCommand({
+                    TableName: TABLE_NAME,
+                    Key: {
+                        PK: item.PK,
+                        SK: item.SK
+                    }
+                });
+                return docClient.send(deleteCommand);
+            });
+            
+            await Promise.all(deletePromises);
+            console.log(`[DATASTORE] Cleaned up ${response.Items.length} old cache items`);
+        }
+    } catch (error) {
+        console.error(`[DATASTORE] Error cleaning up old cache for ${sport}:`, error);
+        // Don't throw here - cleanup failure shouldn't prevent caching
+    }
+}
+
+/**
+ * Save essential NFL players data to DynamoDB cache.
+ * Now stores only essential player data in a single item to avoid chunking complexity.
+ * @param {string} sport The sport (e.g., 'nfl').
+ * @param {object} essentialPlayers Object containing essential players data (not full data).
+ * @returns {Promise<void>}
+ * @throws {Error} if the essential players data cannot be saved.
+ */
+async function saveNflPlayers(sport = 'nfl', essentialPlayers) {
+    try {
+        console.log(`[DATASTORE] Starting to save essential NFL players for ${sport}`);
+        
+        const playerCount = Object.keys(essentialPlayers).length;
+        console.log(`[DATASTORE] Essential players to save: ${playerCount}`);
+        
+        // Calculate estimated size for logging
+        const estimatedSize = JSON.stringify(essentialPlayers).length;
+        console.log(`[DATASTORE] Estimated essential data size: ${Math.round(estimatedSize / 1024)}KB`);
+        
+        if (estimatedSize > 350 * 1024) { // 350KB threshold to stay well under 400KB limit
+            console.warn(`[DATASTORE] Essential data size (${Math.round(estimatedSize / 1024)}KB) is close to DynamoDB item limit`);
+        }
+        
+        // Clean up old cache entries first
+        await cleanupOldNflPlayersCache(sport);
+        
+        // Save essential data in a single item
+        const putCommand = new PutCommand({
+            TableName: TABLE_NAME,
+            Item: {
+                PK: 'NFL_CACHE',
+                SK: `PLAYERS#${sport.toUpperCase()}#ESSENTIAL`,
+                sport: sport,
+                dataType: 'essential',
+                playerCount: playerCount,
+                players: essentialPlayers,
+                cachedAt: new Date().toISOString(),
+                // Cache expires after 24 hours (player data changes daily)
+                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+            }
+        });
+        
+        console.log(`[DATASTORE] Saving essential players data for ${sport}...`);
+        const startTime = Date.now();
+        await docClient.send(putCommand);
+        const saveTime = Date.now() - startTime;
+        
+        console.log(`[DATASTORE] Successfully saved essential NFL players for ${sport} (${playerCount} players) in ${saveTime}ms`);
+    } catch (error) {
+        console.error(`[DATASTORE] Error saving essential NFL players for ${sport}:`, error);
+        if (error.name === 'ValidationException' && error.message.includes('Item size')) {
+            console.error(`[DATASTORE] Essential data too large for single DynamoDB item. Consider further reducing data.`);
+        }
+        throw error;
+    }
+}
+
+/**
+ * Get essential NFL players data from DynamoDB cache.
+ * Now handles simplified single-item storage instead of chunks.
+ * @param {string} sport The sport (e.g., 'nfl').
+ * @returns {Promise<object|null>} The essential players object or null if not found/expired.
+ * @throws {Error} if the players data cannot be retrieved.
+ */
+async function getNflPlayers(sport = 'nfl') {
+    try {
+        console.log(`[DATASTORE] Getting essential NFL players for ${sport} from cache`);
+        
+        // Get the essential players data
+        const command = new GetCommand({
+            TableName: TABLE_NAME,
+            Key: {
+                PK: 'NFL_CACHE',
+                SK: `PLAYERS#${sport.toUpperCase()}#ESSENTIAL`
+            }
+        });
+        
+        const response = await docClient.send(command);
+        if (!response.Item) {
+            console.log(`[DATASTORE] No essential players cache found for ${sport}`);
+            return null;
+        }
+        
+        // Check if cache has expired
+        const expiresAt = new Date(response.Item.expiresAt);
+        if (expiresAt < new Date()) {
+            console.log(`[DATASTORE] Cache expired for ${sport} essential players`);
+            return null;
+        }
+        
+        const { players, playerCount, cachedAt } = response.Item;
+        console.log(`[DATASTORE] Successfully loaded ${playerCount} essential players (cached ${cachedAt})`);
+        
+        return players;
+    } catch (error) {
+        console.error("[DATASTORE] Error getting essential NFL players from DynamoDB:", error);
+        console.error("[DATASTORE] Error stack:", error.stack);
+        throw error;
+    }
+}
+
 module.exports = {
     getData,
     saveData,
@@ -337,5 +740,15 @@ module.exports = {
     saveDraft,
     getDraftsByChannel,
     updatePlayerSlackName,
-    getAllPlayers
+    getAllPlayers,
+    saveLeague,
+    getLeague,
+    getLeaguesByChannel,
+    getAllChannelsWithLeagues,
+    saveNflByeWeeks,
+    getNflByeWeeks,
+    saveNflSchedule,
+    getNflSchedule,
+    saveNflPlayers,
+    getNflPlayers
 };

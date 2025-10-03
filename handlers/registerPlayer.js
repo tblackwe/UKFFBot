@@ -12,7 +12,8 @@ const { resolveSlackUser } = require('../services/slackUserService.js');
  * @param {function} payload.say The function to send a message.
  * @param {object} payload.client The Slack Web API client (optional, for resolving usernames).
  */
-const handleRegisterPlayerCommand = async ({ command, say, client }) => {
+const handleRegisterPlayerCommand = async ({ command, say, client, ack }) => {
+    if (ack) await ack();
     const args = command.text.trim().split(/\s+/);
     const [sleeperUsername, slackUserInput] = args;
 

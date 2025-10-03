@@ -2,6 +2,13 @@ const { App, AwsLambdaReceiver } = require('@slack/bolt');
 const { handleAppMention, handleDirectMessage } = require('./shared/commandPatterns.js');
 const { handleRegisterPlayerCommand } = require('./handlers/registerPlayer.js');
 const { handleRegisterDraftCommand } = require('./handlers/registerDraft.js');
+const { DynamoDBClient } = require('@aws-sdk/client-dynamodb');
+const { DynamoDBDocumentClient, PutCommand, GetCommand } = require('@aws-sdk/lib-dynamodb');
+
+// Initialize DynamoDB client for event deduplication
+const dynamoClient = new DynamoDBClient({ region: process.env.AWS_REGION || 'us-east-1' });
+const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const TABLE_NAME = process.env.DYNAMODB_TABLE_NAME || 'UKFFBot';
 
 // Load view templates
 const appHomeView = require('./views/appHome.json');
@@ -26,8 +33,13 @@ const app = new App({
  */
 app.event('app_mention', handleAppMention);
 
-// Handle message events (if bot is added to channels)
-app.message(handleDirectMessage);
+// Handle direct message events only (not channel messages)
+app.message(async ({ message, say, logger, client }) => {
+  // Only process direct messages, not channel messages
+  if (message.channel_type === 'im') {
+    await handleDirectMessage({ message, say, logger, client });
+  }
+});
 
 // Handle team join events
 app.event('team_join', async ({ event, logger }) => {
@@ -131,7 +143,8 @@ app.view('register_player_modal', async ({ ack, body, view, client, logger }) =>
     await handleRegisterPlayerCommand({
       command: mockCommand,
       say: sayFunction,
-      client: client
+      client: client,
+      ack
     });
 
   } catch (error) {
@@ -206,7 +219,8 @@ app.view('register_draft_modal', async ({ ack, body, view, client, logger }) => 
     // Reuse the existing registerDraft handler
     await handleRegisterDraftCommand({
       command: mockCommand,
-      say: sayFunction
+      say: sayFunction,
+      ack
     });
 
   } catch (error) {
@@ -221,17 +235,101 @@ app.view('register_draft_modal', async ({ ack, body, view, client, logger }) => 
 });
 
 
+/**
+ * Check if an event has been processed using DynamoDB
+ */
+async function isEventProcessed(eventId) {
+  try {
+    const result = await docClient.send(new GetCommand({
+      TableName: TABLE_NAME,
+      Key: {
+        PK: 'EVENT_DEDUP',
+        SK: `EVENT#${eventId}`
+      }
+    }));
+    return !!result.Item;
+  } catch (error) {
+    console.error(`[LAMBDA] Error checking event deduplication for ${eventId}:`, error);
+    return false;
+  }
+}
+
+/**
+ * Mark an event as processed in DynamoDB
+ */
+async function markEventProcessed(eventId) {
+  try {
+    await docClient.send(new PutCommand({
+      TableName: TABLE_NAME,
+      Item: {
+        PK: 'EVENT_DEDUP',
+        SK: `EVENT#${eventId}`,
+        eventId,
+        processedAt: new Date().toISOString(),
+        ttl: Math.floor(Date.now() / 1000) + (60 * 60) // TTL: 1 hour
+      },
+      ConditionExpression: 'attribute_not_exists(PK)' // Only create if not exists
+    }));
+    return true;
+  } catch (error) {
+    if (error.name === 'ConditionalCheckFailedException') {
+      console.log(`[LAMBDA] Event ${eventId} already marked as processed`);
+      return false; // Event was already processed
+    }
+    console.error(`[LAMBDA] Error marking event ${eventId} as processed:`, error);
+    return false;
+  }
+}
+
 // AWS Lambda handler
 module.exports.handler = async (event, context, callback) => {
+  const startTime = Date.now();
+  
+  // Extract event ID for deduplication
+  let eventId = null;
+  try {
+    const body = JSON.parse(event.body || '{}');
+    eventId = body.event?.event_id || body.event_id || `${body.team_id}-${body.event_time}-${Math.random()}`;
+  } catch (e) {
+    eventId = `fallback-${Date.now()}-${Math.random()}`;
+  }
+
+  console.log(`[LAMBDA] Processing event ${eventId} at ${new Date().toISOString()}`);
+
+  // Check DynamoDB for deduplication (persistent check)
+  const alreadyProcessed = await isEventProcessed(eventId);
+  if (alreadyProcessed) {
+    console.log(`[LAMBDA] Duplicate event ${eventId} detected, skipping`);
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ message: 'Event already processed' })
+    };
+  }
+
+  // Mark event as being processed
+  const marked = await markEventProcessed(eventId);
+  if (!marked) {
+    console.log(`[LAMBDA] Event ${eventId} was processed by another instance, skipping`);
+    return {
+      statusCode: 200,
+      body: JSON.stringify({ message: 'Event processed by another instance' })
+    };
+  }
+
   if (process.env.NODE_ENV === 'development') {
     console.log('Lambda received event:', JSON.stringify(event, null, 2));
   }
 
   try {
     const handler = await awsLambdaReceiver.start();
-    return await handler(event, context, callback);
+    const result = await handler(event, context, callback);
+    
+    const duration = Date.now() - startTime;
+    console.log(`[LAMBDA] Event ${eventId} processed successfully in ${duration}ms`);
+    
+    return result;
   } catch (error) {
-    console.error('Lambda handler error:', error);
+    console.error(`[LAMBDA] Event ${eventId} error:`, error);
     return {
       statusCode: 500,
       body: JSON.stringify({ error: 'Internal server error' })
