@@ -667,8 +667,8 @@ async function saveNflPlayers(sport = 'nfl', essentialPlayers) {
                 playerCount: playerCount,
                 players: essentialPlayers,
                 cachedAt: new Date().toISOString(),
-                // Cache expires after 24 hours (player data changes daily)
-                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString()
+                // Cache expires after 2 hours (player data changes frequently)
+                expiresAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString()
             }
         });
         
