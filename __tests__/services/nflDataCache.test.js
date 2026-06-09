@@ -15,22 +15,30 @@ const {
 // Mock the dependencies
 jest.mock('../../services/datastore.js');
 jest.mock('../../services/sleeper.js');
+jest.mock('../../services/espn.js');
 
 const mockDatastore = require('../../services/datastore.js');
 const mockSleeper = require('../../services/sleeper.js');
+const mockEspn = require('../../services/espn.js');
 
 describe('NFL Data Cache Service', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        
+
+        // Default: ESPN unavailable, so bye-week tests fall back to hardcoded data
+        // unless a test overrides this.
+        mockEspn.fetchNflByeWeeks.mockRejectedValue(new Error('ESPN unavailable'));
+
         // Reset console.log and console.error to avoid cluttering test output
         jest.spyOn(console, 'log').mockImplementation(() => {});
         jest.spyOn(console, 'error').mockImplementation(() => {});
+        jest.spyOn(console, 'warn').mockImplementation(() => {});
     });
 
     afterEach(() => {
         console.log.mockRestore();
         console.error.mockRestore();
+        console.warn.mockRestore();
     });
 
     describe('getNflByeWeeksWithCache', () => {
@@ -45,9 +53,23 @@ describe('NFL Data Cache Service', () => {
             expect(mockDatastore.saveNflByeWeeks).not.toHaveBeenCalled();
         });
 
-        it('should return hardcoded data and cache it if not cached', async () => {
+        it('should fetch from ESPN and cache it when not cached', async () => {
+            const espnByeWeeks = { 'KC': 5, 'CAR': 5 };
             mockDatastore.getNflByeWeeks.mockResolvedValue(null);
             mockDatastore.saveNflByeWeeks.mockResolvedValue();
+            mockEspn.fetchNflByeWeeks.mockResolvedValue(espnByeWeeks);
+
+            const result = await getNflByeWeeksWithCache(2025);
+
+            expect(result).toEqual(espnByeWeeks);
+            expect(mockEspn.fetchNflByeWeeks).toHaveBeenCalledWith(2025);
+            expect(mockDatastore.saveNflByeWeeks).toHaveBeenCalledWith(2025, espnByeWeeks);
+        });
+
+        it('should fall back to hardcoded data and cache it when ESPN is unavailable', async () => {
+            mockDatastore.getNflByeWeeks.mockResolvedValue(null);
+            mockDatastore.saveNflByeWeeks.mockResolvedValue();
+            // mockEspn.fetchNflByeWeeks rejects by default (see beforeEach)
 
             const result = await getNflByeWeeksWithCache(2025);
 
