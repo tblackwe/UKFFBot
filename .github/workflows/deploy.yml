@@ -149,9 +149,10 @@ jobs:
           ENVIRONMENT: ${{ needs.determine-environment.outputs.environment }}
           SLACK_BOT_TOKEN: ${{ secrets.SLACK_BOT_TOKEN }}
           SLACK_SIGNING_SECRET: ${{ secrets.SLACK_SIGNING_SECRET }}
+          ALARM_EMAIL: ${{ vars.ALARM_EMAIL }}
         run: |
           STACK_NAME="ukff-slack-bot-${ENVIRONMENT}"
-          
+
           sam deploy \
             --stack-name $STACK_NAME \
             --s3-bucket $S3_BUCKET \
@@ -161,6 +162,7 @@ jobs:
               SlackBotToken=$SLACK_BOT_TOKEN \
               SlackSigningSecret=$SLACK_SIGNING_SECRET \
               Environment=$ENVIRONMENT \
+              AlarmEmail=$ALARM_EMAIL \
             --no-fail-on-empty-changeset \
             --no-confirm-changeset \
             --tags \
