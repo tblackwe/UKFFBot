@@ -38,11 +38,37 @@ const NFL_BYE_WEEKS_2025 = {
 };
 
 /**
+ * NFL teams and their bye weeks for 2026 season
+ * Data sourced from ESPN API: https://sports.core.api.espn.com/v2/sports/football/leagues/nfl/seasons/2026/types/2/weeks/{week}
+ * Updated: 2026-06-08 - From official ESPN data
+ */
+const NFL_BYE_WEEKS_2026 = {
+    // Week 5 byes
+    'CAR': 5, 'KC': 5,
+    // Week 6 byes
+    'CIN': 6, 'DET': 6, 'MIA': 6, 'MIN': 6,
+    // Week 7 byes
+    'BUF': 7, 'JAX': 7, 'LAC': 7, 'WAS': 7,
+    // Week 8 byes
+    'HOU': 8, 'NO': 8, 'NYG': 8, 'SF': 8,
+    // Week 9 byes
+    'PIT': 9, 'TEN': 9,
+    // Week 10 byes
+    'CHI': 10, 'DEN': 10, 'PHI': 10, 'TB': 10,
+    // Week 11 byes
+    'ATL': 11, 'CLE': 11, 'GB': 11, 'LAR': 11, 'NE': 11, 'SEA': 11,
+    // Week 13 byes
+    'BAL': 13, 'IND': 13, 'LV': 13, 'NYJ': 13,
+    // Week 14 byes
+    'ARI': 14, 'DAL': 14
+};
+
+/**
  * Future seasons can be added here as they become available
  */
 const NFL_BYE_WEEKS_BY_SEASON = {
-    2025: NFL_BYE_WEEKS_2025
-    // 2026: NFL_BYE_WEEKS_2026 - to be added when available
+    2025: NFL_BYE_WEEKS_2025,
+    2026: NFL_BYE_WEEKS_2026
 };
 
 /**
@@ -233,8 +259,15 @@ async function refreshNflByeWeeksCache(season) {
  */
 async function getCacheStatus() {
     try {
-        const currentSeason = 2025; // Could be derived from getNflState()
-        
+        let currentSeason;
+        try {
+            const nflState = await getNflState();
+            currentSeason = parseInt(nflState.season, 10);
+        } catch (stateError) {
+            console.warn('[CACHE] Could not derive season from NFL state, falling back to latest known season:', stateError.message);
+            currentSeason = Math.max(...Object.keys(NFL_BYE_WEEKS_BY_SEASON).map(Number));
+        }
+
         const [byeWeeksCache, playersCache] = await Promise.allSettled([
             getNflByeWeeks(currentSeason),
             getNflPlayers('nfl')
@@ -525,6 +558,7 @@ module.exports = {
     clearNflPlayersCache,
     getCacheStatus,
     NFL_BYE_WEEKS_2025,
+    NFL_BYE_WEEKS_2026,
     NFL_BYE_WEEKS_BY_SEASON,
     // Export for testing
     extractEssentialPlayerData,

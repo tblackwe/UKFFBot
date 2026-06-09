@@ -197,13 +197,14 @@ describe('NFL Data Cache Service', () => {
             
             mockDatastore.getNflByeWeeks.mockResolvedValue(mockByeWeeks);
             mockDatastore.getNflPlayers.mockResolvedValue(mockPlayers);
+            mockSleeper.getNflState.mockResolvedValue({ season: '2026' });
 
             const result = await getCacheStatus();
 
             expect(result).toEqual({
                 byeWeeks: {
                     cached: true,
-                    season: 2025,
+                    season: 2026,
                     error: null
                 },
                 players: {
