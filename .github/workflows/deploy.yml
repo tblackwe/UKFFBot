@@ -55,13 +55,13 @@ jobs:
 
       - name: Validate SAM template
         run: |
-          # Install SAM CLI
+          # Install SAM CLI (runners now ship a preinstalled SAM; --update handles both cases)
           wget https://github.com/aws/aws-sam-cli/releases/latest/download/aws-sam-cli-linux-x86_64.zip
           unzip aws-sam-cli-linux-x86_64.zip -d sam-installation
-          sudo ./sam-installation/install
+          sudo ./sam-installation/install --update
           
-          # Validate template
-          sam validate --template template.yaml
+          # Validate template (newer SAM CLI requires an explicit region)
+          sam validate --template template.yaml --region us-east-1
 
   # Determine deployment environment and strategy
   determine-environment:

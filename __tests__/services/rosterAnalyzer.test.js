@@ -8,7 +8,7 @@ describe('rosterAnalyzer', () => {
                 first_name: 'Test',
                 last_name: 'Player',
                 position: 'QB',
-                team: 'DET', // DET has bye week 5
+                team: 'PIT', // PIT has bye week 5
                 injury_status: 'Healthy'
             };
 
@@ -74,7 +74,7 @@ describe('rosterAnalyzer', () => {
                 first_name: 'Test',
                 last_name: 'Player1',
                 position: 'QB',
-                team: 'DET', // bye week 5
+                team: 'PIT', // bye week 5
                 injury_status: 'Healthy'
             },
             'player2': {
@@ -88,7 +88,7 @@ describe('rosterAnalyzer', () => {
                 first_name: 'Bench',
                 last_name: 'Player',
                 position: 'WR',
-                team: 'DET', // bye week 5 but on bench
+                team: 'PIT', // bye week 5 but on bench
                 injury_status: 'Healthy'
             }
         };
@@ -104,7 +104,7 @@ describe('rosterAnalyzer', () => {
             expect(result.hasIssues).toBe(true);
             expect(result.startingByeWeekPlayers).toHaveLength(1);
             expect(result.startingByeWeekPlayers[0].name).toBe('Test Player1');
-            expect(result.startingByeWeekPlayers[0].team).toBe('DET');
+            expect(result.startingByeWeekPlayers[0].team).toBe('PIT');
         });
 
         test('should detect starting injured players as critical issue', () => {
