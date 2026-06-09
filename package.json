@@ -6,11 +6,25 @@
   "scripts": {
     "start:local": "node app.js",
     "start:sam": "sam local start-api --port 3000 --env-vars local-env.json",
-    "test": "jest",
+    "test": "jest --coverage",
+    "test:watch": "jest --watch",
     "build": "npm ci --production"
   },
   "jest": {
-    "testEnvironment": "node"
+    "testEnvironment": "node",
+    "collectCoverageFrom": [
+      "handlers/**/*.js",
+      "services/**/*.js",
+      "shared/**/*.js"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "statements": 68,
+        "branches": 58,
+        "functions": 63,
+        "lines": 68
+      }
+    }
   },
   "license": "MIT",
   "dependencies": {

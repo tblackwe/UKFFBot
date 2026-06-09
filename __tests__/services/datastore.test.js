@@ -33,7 +33,16 @@ const {
     getDraft,
     saveDraft,
     getDraftsByChannel,
-    getLeaguesByChannel
+    getLeaguesByChannel,
+    updatePlayerSlackName,
+    getAllPlayers,
+    saveLeague,
+    getLeague,
+    getAllChannelsWithLeagues,
+    saveNflByeWeeks,
+    getNflByeWeeks,
+    getNflSchedule,
+    getNflPlayers
 } = require('../../services/datastore.js');
 
 const { QueryCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
@@ -290,6 +299,114 @@ describe('DynamoDB Datastore Service', () => {
 
             expect(ScanCommand).toHaveBeenCalled();
             expect(result).toEqual(items);
+        });
+    });
+
+    describe('updatePlayerSlackName', () => {
+        it('updates an existing player', async () => {
+            mockSend
+                .mockResolvedValueOnce({ Item: { sleeperId: '123', slackMemberId: 'U1', slackName: 'Old' } }) // getPlayer
+                .mockResolvedValueOnce({}); // put
+
+            await updatePlayerSlackName('123', 'New');
+
+            expect(mockSend).toHaveBeenCalledTimes(2);
+        });
+
+        it('throws when the player does not exist', async () => {
+            mockSend.mockResolvedValueOnce({}); // getPlayer -> no Item
+
+            await expect(updatePlayerSlackName('999', 'New')).rejects.toThrow(/not found/);
+        });
+    });
+
+    describe('getAllPlayers', () => {
+        it('queries the PLAYER partition and maps the results', async () => {
+            mockSend.mockResolvedValue({
+                Items: [{ sleeperId: '1', slackMemberId: 'U1', slackName: 'Alice' }]
+            });
+
+            const result = await getAllPlayers();
+
+            expect(result).toEqual([{ sleeperId: '1', slackMemberId: 'U1', slackName: 'Alice' }]);
+        });
+    });
+
+    describe('saveLeague / getLeague', () => {
+        it('saves a league item', async () => {
+            mockSend.mockResolvedValue({});
+
+            await saveLeague('L1', 'C1', { name: 'Test', season: 2025, sport: 'nfl', total_rosters: 12, status: 'in_season' });
+
+            expect(mockSend).toHaveBeenCalledTimes(1);
+        });
+
+        it('returns the league item when found, null otherwise', async () => {
+            mockSend.mockResolvedValueOnce({ Item: { leagueId: 'L1', leagueName: 'Test' } });
+            await expect(getLeague('L1')).resolves.toEqual({ leagueId: 'L1', leagueName: 'Test' });
+
+            mockSend.mockResolvedValueOnce({});
+            await expect(getLeague('missing')).resolves.toBeNull();
+        });
+    });
+
+    describe('getAllChannelsWithLeagues', () => {
+        it('groups leagues by channel id', async () => {
+            mockSend.mockResolvedValue({
+                Items: [
+                    { leagueId: 'L1', slackChannelId: 'C1' },
+                    { leagueId: 'L2', slackChannelId: 'C1' },
+                    { leagueId: 'L3', slackChannelId: 'C2' }
+                ]
+            });
+
+            const result = await getAllChannelsWithLeagues();
+
+            expect(result).toHaveLength(2);
+            const c1 = result.find((c) => c.channelId === 'C1');
+            expect(c1.leagues).toHaveLength(2);
+        });
+    });
+
+    describe('NFL cache expiry', () => {
+        const future = new Date(Date.now() + 60_000).toISOString();
+        const past = new Date(Date.now() - 60_000).toISOString();
+
+        it('saveNflByeWeeks writes an item with a ttl', async () => {
+            mockSend.mockResolvedValue({});
+            await saveNflByeWeeks(2026, { KC: 5 });
+            expect(mockSend).toHaveBeenCalledTimes(1);
+        });
+
+        it('getNflByeWeeks returns data when fresh', async () => {
+            mockSend.mockResolvedValue({ Item: { byeWeeks: { KC: 5 }, expiresAt: future } });
+            await expect(getNflByeWeeks(2026)).resolves.toEqual({ KC: 5 });
+        });
+
+        it('getNflByeWeeks returns null when expired', async () => {
+            mockSend.mockResolvedValue({ Item: { byeWeeks: { KC: 5 }, expiresAt: past } });
+            await expect(getNflByeWeeks(2026)).resolves.toBeNull();
+        });
+
+        it('getNflByeWeeks returns null when missing', async () => {
+            mockSend.mockResolvedValue({});
+            await expect(getNflByeWeeks(2026)).resolves.toBeNull();
+        });
+
+        it('getNflSchedule returns games when fresh and null when expired', async () => {
+            mockSend.mockResolvedValueOnce({ Item: { season: 2026, week: 5, games: [{ home_team: 'KC' }], expiresAt: future } });
+            await expect(getNflSchedule(2026, 5)).resolves.toMatchObject({ games: [{ home_team: 'KC' }] });
+
+            mockSend.mockResolvedValueOnce({ Item: { expiresAt: past } });
+            await expect(getNflSchedule(2026, 5)).resolves.toBeNull();
+        });
+
+        it('getNflPlayers returns players when fresh and null when expired', async () => {
+            mockSend.mockResolvedValueOnce({ Item: { players: { p1: {} }, playerCount: 1, expiresAt: future } });
+            await expect(getNflPlayers('nfl')).resolves.toEqual({ p1: {} });
+
+            mockSend.mockResolvedValueOnce({ Item: { players: {}, expiresAt: past } });
+            await expect(getNflPlayers('nfl')).resolves.toBeNull();
         });
     });
 });
