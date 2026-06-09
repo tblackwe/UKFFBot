@@ -1,6 +1,7 @@
 const { getDraftPicks, getDraft } = require('./sleeper.js');
 const { generatePickMessagePayload } = require('../handlers/lastpick.js');
 const { getData, saveDraft } = require('./datastore.js');
+const logger = require('../shared/logger.js');
 
 
 /**
@@ -13,7 +14,7 @@ async function checkDraftForUpdates(app) {
     try {
         data = await getData();
     } catch (error) {
-        console.error("Draft Monitor: Could not read data.json.", error);
+        logger.error('Draft monitor: could not read registered drafts', { error });
         return;
     }
 
@@ -61,7 +62,7 @@ async function checkDraftForUpdates(app) {
                 });
             }
         } catch (error) {
-            console.error(`Draft Monitor: Error checking draft ${draftId}.`, error);
+            logger.error('Draft monitor: error checking draft', { draftId, error });
         }
     }));
 

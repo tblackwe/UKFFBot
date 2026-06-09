@@ -1,5 +1,6 @@
 const { App } = require('@slack/bolt');
 const { checkDraftForUpdates } = require('./services/draftMonitor.js');
+const logger = require('./shared/logger.js');
 
 // Initialize the app for sending messages
 const app = new App({
@@ -28,8 +29,8 @@ exports.handler = async (event, context) => {
       })
     };
   } catch (error) {
-    console.error('Draft monitoring failed:', error);
-    
+    logger.error('Draft monitoring failed', { error });
+
     return {
       statusCode: 500,
       body: JSON.stringify({
