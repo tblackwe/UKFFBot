@@ -4,6 +4,8 @@
  * If you are using an older version of Node.js, you may need to install a polyfill like 'node-fetch'.
  */
 
+const { mapSleeperToEspnTeam } = require('../shared/teamMappings.js');
+
 const API_BASE_URL = 'https://api.sleeper.app/v1';
 
 // Resilience defaults for outbound API calls.
@@ -194,20 +196,6 @@ const getAllPlayers = (sport = 'nfl') => {
 const getNflState = () => {
     return sleeperRequest('/state/nfl');
 };
-
-/**
- * Maps Sleeper team abbreviations to ESPN team abbreviations.
- * Sleeper uses 'WAS' for Washington, but ESPN schedule API uses 'WSH'.
- * @param {string} sleeperTeam The team abbreviation from Sleeper.
- * @returns {string} The corresponding ESPN team abbreviation.
- */
-function mapSleeperToEspnTeam(sleeperTeam) {
-    const teamMap = {
-        'WAS': 'WSH',  // Washington: Sleeper uses WAS, ESPN uses WSH
-        // Add other mappings if needed
-    };
-    return teamMap[sleeperTeam] || sleeperTeam;
-}
 
 /**
  * Get NFL schedule for a specific week and season using ESPN API.

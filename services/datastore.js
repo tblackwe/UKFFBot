@@ -499,8 +499,11 @@ async function saveNflByeWeeks(season, byeWeeks) {
                 season: season,
                 byeWeeks: byeWeeks,
                 cachedAt: new Date().toISOString(),
-                // Cache expires after 1 year (season ends)
-                expiresAt: new Date(Date.now() + 365 * 24 * 60 * 60 * 1000).toISOString()
+                // Short TTL so the scheduled roster checks re-fetch from ESPN ~weekly
+                // and pick up any mid-season bye-week corrections.
+                expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
+                // DynamoDB TTL (epoch seconds) so expired entries are auto-purged.
+                ttl: Math.floor((Date.now() + 7 * 24 * 60 * 60 * 1000) / 1000)
             }
         });
         

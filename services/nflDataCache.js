@@ -10,6 +10,8 @@
 
 const { saveNflByeWeeks, getNflByeWeeks, saveNflPlayers, getNflPlayers, saveNflSchedule, getNflSchedule } = require('./datastore.js');
 const { getAllPlayers: sleeperGetAllPlayers, getNflState } = require('./sleeper.js');
+const { fetchNflByeWeeks } = require('./espn.js');
+const { mapSleeperToEspnTeam } = require('../shared/teamMappings.js');
 
 /**
  * NFL teams and their bye weeks for 2025 season
@@ -81,29 +83,39 @@ const NFL_BYE_WEEKS_BY_SEASON = {
 async function getNflByeWeeksWithCache(season) {
     try {
         console.log(`[CACHE] Getting NFL bye weeks for ${season} season`);
-        
-        // Try to get from cache first
+
+        // 1. Fresh cache wins (cheap, and avoids hammering ESPN).
         const cachedByeWeeks = await getNflByeWeeks(season);
         if (cachedByeWeeks) {
             console.log(`[CACHE] Using cached NFL bye weeks for ${season} season`);
             return cachedByeWeeks;
         }
 
-        // Fall back to hardcoded data
-        const byeWeeks = NFL_BYE_WEEKS_BY_SEASON[season];
+        // 2. Live ESPN data, validated. This is the source of truth: it lets new
+        //    seasons work without a code change and picks up mid-season
+        //    corrections. fetchNflByeWeeks throws if the data is incomplete.
+        let byeWeeks;
+        try {
+            byeWeeks = await fetchNflByeWeeks(season);
+            console.log(`[CACHE] Fetched ${Object.keys(byeWeeks).length} bye weeks from ESPN for ${season}`);
+        } catch (espnError) {
+            // 3. Fall back to the hardcoded table when ESPN is unavailable/invalid.
+            console.warn(`[CACHE] ESPN bye-week fetch failed for ${season}, falling back to hardcoded data: ${espnError.message}`);
+            byeWeeks = NFL_BYE_WEEKS_BY_SEASON[season];
+        }
+
         if (!byeWeeks) {
             throw new Error(`No bye week data available for ${season} season`);
         }
 
-        // Cache the bye weeks data
+        // Cache the resolved data (short TTL so the scheduler re-fetches weekly).
         console.log(`[CACHE] Caching NFL bye weeks for ${season} season`);
         await saveNflByeWeeks(season, byeWeeks);
-        console.log(`[CACHE] Successfully cached NFL bye weeks for ${season} season`);
-        
+
         return byeWeeks;
     } catch (error) {
         console.error(`Error getting NFL bye weeks for ${season}:`, error);
-        // Return hardcoded data as last resort
+        // Return hardcoded data as last resort.
         return NFL_BYE_WEEKS_BY_SEASON[season] || {};
     }
 }
@@ -238,14 +250,25 @@ async function refreshNflPlayersCache(sport = 'nfl') {
 async function refreshNflByeWeeksCache(season) {
     try {
         console.log(`[CACHE] Force refreshing NFL bye weeks for ${season} season`);
-        const byeWeeks = NFL_BYE_WEEKS_BY_SEASON[season];
+
+        // Prefer live ESPN data so a forced refresh picks up corrections; fall
+        // back to the hardcoded table when ESPN is unavailable/invalid.
+        let byeWeeks;
+        try {
+            byeWeeks = await fetchNflByeWeeks(season);
+            console.log(`[CACHE] Fetched ${Object.keys(byeWeeks).length} bye weeks from ESPN for ${season}`);
+        } catch (espnError) {
+            console.warn(`[CACHE] ESPN bye-week fetch failed for ${season}, falling back to hardcoded data: ${espnError.message}`);
+            byeWeeks = NFL_BYE_WEEKS_BY_SEASON[season];
+        }
+
         if (!byeWeeks) {
             throw new Error(`No bye week data available for ${season} season`);
         }
 
         await saveNflByeWeeks(season, byeWeeks);
         console.log(`[CACHE] Refreshed NFL bye weeks cache for ${season} season`);
-        
+
         return byeWeeks;
     } catch (error) {
         console.error(`Error refreshing NFL bye weeks cache for ${season}:`, error);
@@ -367,20 +390,6 @@ async function getNflScheduleWithCache(season, week) {
         // Return empty array rather than throwing - allows roster analysis to continue
         return [];
     }
-}
-
-/**
- * Maps Sleeper team abbreviations to ESPN team abbreviations.
- * Sleeper uses 'WAS' for Washington, but ESPN schedule API uses 'WSH'.
- * @param {string} sleeperTeam The team abbreviation from Sleeper.
- * @returns {string} The corresponding ESPN team abbreviation.
- */
-function mapSleeperToEspnTeam(sleeperTeam) {
-    const teamMap = {
-        'WAS': 'WSH',  // Washington: Sleeper uses WAS, ESPN uses WSH
-        // Add other mappings if needed
-    };
-    return teamMap[sleeperTeam] || sleeperTeam;
 }
 
 /**
