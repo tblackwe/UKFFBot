@@ -6,6 +6,71 @@
 
 const API_BASE_URL = 'https://api.sleeper.app/v1';
 
+// Resilience defaults for outbound API calls.
+const DEFAULT_TIMEOUT_MS = 5000;
+const DEFAULT_ATTEMPTS = 3;
+const DEFAULT_BASE_DELAY_MS = 200;
+// Transient statuses worth retrying. 4xx (other than 408/429) are caller errors
+// and are returned without retry.
+const RETRYABLE_STATUS = new Set([408, 429, 500, 502, 503, 504]);
+
+const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Exponential backoff with jitter, capped at 2s.
+ * @param {number} attempt 1-based attempt number that just failed.
+ * @param {number} baseDelayMs Base delay in milliseconds.
+ * @returns {number} Delay before the next attempt, in milliseconds.
+ */
+function backoffDelayMs(attempt, baseDelayMs) {
+    const capped = Math.min(baseDelayMs * 2 ** (attempt - 1), 2000);
+    return capped + Math.floor(Math.random() * 100);
+}
+
+/**
+ * fetch() with a per-attempt timeout and bounded retries with exponential backoff.
+ * Retries on network errors, timeouts, and transient HTTP statuses (408/429/5xx).
+ * Non-retryable responses (e.g. 404) are returned to the caller to handle.
+ * @param {string} url The URL to fetch.
+ * @param {object} [options]
+ * @param {number} [options.timeoutMs] Per-attempt timeout.
+ * @param {number} [options.attempts] Max attempts (including the first).
+ * @param {number} [options.baseDelayMs] Base backoff delay.
+ * @param {string} [options.label] Label used in log messages.
+ * @returns {Promise<Response>} The fetch Response.
+ * @throws {Error} The last error if all attempts fail.
+ */
+async function resilientFetch(url, { timeoutMs = DEFAULT_TIMEOUT_MS, attempts = DEFAULT_ATTEMPTS, baseDelayMs = DEFAULT_BASE_DELAY_MS, label = 'API' } = {}) {
+    let lastError;
+    for (let attempt = 1; attempt <= attempts; attempt++) {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+            const response = await fetch(url, { signal: controller.signal });
+            clearTimeout(timer);
+
+            if (RETRYABLE_STATUS.has(response.status) && attempt < attempts) {
+                console.warn(`[HTTP] ${label} returned ${response.status} (attempt ${attempt}/${attempts}), retrying...`);
+                lastError = new Error(`${label} request failed: ${response.status} ${response.statusText}`);
+                await delay(backoffDelayMs(attempt, baseDelayMs));
+                continue;
+            }
+            return response;
+        } catch (error) {
+            clearTimeout(timer);
+            lastError = error;
+            const reason = error.name === 'AbortError' ? `timeout after ${timeoutMs}ms` : error.message;
+            if (attempt < attempts) {
+                console.warn(`[HTTP] ${label} request error (${reason}) (attempt ${attempt}/${attempts}), retrying...`);
+                await delay(backoffDelayMs(attempt, baseDelayMs));
+                continue;
+            }
+            console.error(`[HTTP] ${label} request failed after ${attempts} attempts: ${reason}`);
+        }
+    }
+    throw lastError;
+}
+
 /**
  * A helper function to fetch data from the Sleeper API.
  * @param {string} endpoint The API endpoint to call, starting with a '/'.
@@ -15,7 +80,7 @@ const API_BASE_URL = 'https://api.sleeper.app/v1';
 async function sleeperRequest(endpoint) {
     const url = `${API_BASE_URL}${endpoint}`;
     try {
-        const response = await fetch(url);
+        const response = await resilientFetch(url, { label: 'Sleeper API' });
         if (!response.ok) {
             const errorBody = await response.text();
             throw new Error(`Sleeper API request failed: ${response.status} ${response.statusText} - ${errorBody}`);
@@ -152,9 +217,9 @@ function mapSleeperToEspnTeam(sleeperTeam) {
  */
 const getNflSchedule = async (season, week) => {
     const url = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&seasontype=2&year=${season}`;
-    
+
     try {
-        const response = await fetch(url);
+        const response = await resilientFetch(url, { label: 'ESPN API' });
         if (!response.ok) {
             throw new Error(`ESPN API request failed: ${response.status} ${response.statusText}`);
         }
@@ -214,4 +279,5 @@ module.exports = {
     getNflState,
     getNflSchedule,
     mapSleeperToEspnTeam,
+    resilientFetch,
 };
