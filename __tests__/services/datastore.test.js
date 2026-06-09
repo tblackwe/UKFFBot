@@ -25,14 +25,18 @@ jest.mock('@aws-sdk/lib-dynamodb', () => ({
     ScanCommand: jest.fn()
 }));
 
-const { 
-    getData, 
-    saveData, 
-    getPlayer, 
-    savePlayer, 
-    getDraft, 
-    saveDraft 
+const {
+    getData,
+    saveData,
+    getPlayer,
+    savePlayer,
+    getDraft,
+    saveDraft,
+    getDraftsByChannel,
+    getLeaguesByChannel
 } = require('../../services/datastore.js');
+
+const { QueryCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
 
 describe('DynamoDB Datastore Service', () => {
 
@@ -220,6 +224,72 @@ describe('DynamoDB Datastore Service', () => {
             await saveDraft('67890', 'C123456', 25);
 
             expect(mockSend).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe('getDraftsByChannel', () => {
+        it('should query the SlackChannelIndex GSI scoped to DRAFT items', async () => {
+            mockSend.mockResolvedValue({
+                Items: [
+                    { draftId: '67890', slackChannelId: 'C123456', lastKnownPickCount: 10 }
+                ]
+            });
+
+            const result = await getDraftsByChannel('C123456');
+
+            expect(QueryCommand).toHaveBeenCalledWith(expect.objectContaining({
+                IndexName: 'SlackChannelIndex',
+                KeyConditionExpression: 'slackChannelId = :channelId AND PK = :pk',
+                ExpressionAttributeValues: { ':channelId': 'C123456', ':pk': 'DRAFT' }
+            }));
+            expect(result).toEqual([
+                { draftId: '67890', slack_channel_id: 'C123456', last_known_pick_count: 10 }
+            ]);
+        });
+
+        it('should fall back to a scan when the GSI is unavailable', async () => {
+            mockSend
+                .mockRejectedValueOnce(new Error('GSI not found'))
+                .mockResolvedValueOnce({
+                    Items: [
+                        { draftId: '111', slackChannelId: 'C999', lastKnownPickCount: 3 }
+                    ]
+                });
+
+            const result = await getDraftsByChannel('C999');
+
+            expect(ScanCommand).toHaveBeenCalled();
+            expect(result).toEqual([
+                { draftId: '111', slack_channel_id: 'C999', last_known_pick_count: 3 }
+            ]);
+        });
+    });
+
+    describe('getLeaguesByChannel', () => {
+        it('should query the SlackChannelIndex GSI scoped to LEAGUE items', async () => {
+            const items = [{ PK: 'LEAGUE', leagueId: 'L1', slackChannelId: 'C123456' }];
+            mockSend.mockResolvedValue({ Items: items });
+
+            const result = await getLeaguesByChannel('C123456');
+
+            expect(QueryCommand).toHaveBeenCalledWith(expect.objectContaining({
+                IndexName: 'SlackChannelIndex',
+                KeyConditionExpression: 'slackChannelId = :channelId AND PK = :pk',
+                ExpressionAttributeValues: { ':channelId': 'C123456', ':pk': 'LEAGUE' }
+            }));
+            expect(result).toEqual(items);
+        });
+
+        it('should fall back to a scan when the GSI is unavailable', async () => {
+            const items = [{ PK: 'LEAGUE', leagueId: 'L2', slackChannelId: 'C999' }];
+            mockSend
+                .mockRejectedValueOnce(new Error('GSI not found'))
+                .mockResolvedValueOnce({ Items: items });
+
+            const result = await getLeaguesByChannel('C999');
+
+            expect(ScanCommand).toHaveBeenCalled();
+            expect(result).toEqual(items);
         });
     });
 });

@@ -219,15 +219,19 @@ async function saveDraft(draftId, slackChannelId, lastKnownPickCount = 0) {
  */
 async function getDraftsByChannel(slackChannelId) {
     try {
+        // SlackChannelIndex is a composite GSI (slackChannelId HASH + PK RANGE),
+        // so we filter to DRAFT items on the key itself — leagues share the
+        // slackChannelId attribute and would otherwise be returned too.
         const command = new QueryCommand({
             TableName: TABLE_NAME,
-            IndexName: 'SlackChannelIndex', // This would need to be created as a GSI
-            KeyConditionExpression: 'slackChannelId = :channelId',
+            IndexName: 'SlackChannelIndex',
+            KeyConditionExpression: 'slackChannelId = :channelId AND PK = :pk',
             ExpressionAttributeValues: {
-                ':channelId': slackChannelId
+                ':channelId': slackChannelId,
+                ':pk': 'DRAFT'
             }
         });
-        
+
         const response = await docClient.send(command);
         return response.Items.map(item => ({
             draftId: item.draftId,
@@ -393,6 +397,33 @@ async function getLeague(leagueId) {
  */
 async function getLeaguesByChannel(channelId) {
     try {
+        const command = new QueryCommand({
+            TableName: TABLE_NAME,
+            IndexName: 'SlackChannelIndex',
+            KeyConditionExpression: 'slackChannelId = :channelId AND PK = :pk',
+            ExpressionAttributeValues: {
+                ':channelId': channelId,
+                ':pk': 'LEAGUE'
+            }
+        });
+
+        const response = await docClient.send(command);
+        return response.Items || [];
+    } catch (error) {
+        // If GSI doesn't exist, fall back to scan (less efficient)
+        console.warn("GSI not available for leagues, falling back to scan:", error.message);
+        return await getLeaguesByChannelScan(channelId);
+    }
+}
+
+/**
+ * Fallback method to get leagues by channel using scan.
+ * @param {string} channelId The Slack channel ID.
+ * @returns {Promise<object[]>} Array of league objects registered to the channel.
+ * @throws {Error} if the leagues cannot be retrieved.
+ */
+async function getLeaguesByChannelScan(channelId) {
+    try {
         const scanCommand = new ScanCommand({
             TableName: TABLE_NAME,
             FilterExpression: 'PK = :pk AND slackChannelId = :channelId',
@@ -401,7 +432,7 @@ async function getLeaguesByChannel(channelId) {
                 ':channelId': channelId
             }
         });
-        
+
         const response = await docClient.send(scanCommand);
         return response.Items || [];
     } catch (error) {
