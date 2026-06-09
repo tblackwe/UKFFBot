@@ -21,7 +21,7 @@ Parameters:
 
 Globals:
   Function:
-    Runtime: nodejs20.x
+    Runtime: nodejs22.x
     Timeout: 30
     MemorySize: 256
     Environment:
@@ -43,11 +43,28 @@ Resources:
           AttributeType: S
         - AttributeName: SK
           AttributeType: S
+        - AttributeName: slackChannelId
+          AttributeType: S
       KeySchema:
         - AttributeName: PK
           KeyType: HASH
         - AttributeName: SK
           KeyType: RANGE
+      # Index channel-scoped lookups (drafts and leagues) so they Query by
+      # slackChannelId + item type (PK) instead of scanning the whole table.
+      GlobalSecondaryIndexes:
+        - IndexName: SlackChannelIndex
+          KeySchema:
+            - AttributeName: slackChannelId
+              KeyType: HASH
+            - AttributeName: PK
+              KeyType: RANGE
+          Projection:
+            ProjectionType: ALL
+      # Auto-expire items carrying a `ttl` epoch attribute (e.g. event dedup records).
+      TimeToLiveSpecification:
+        AttributeName: ttl
+        Enabled: true
       PointInTimeRecoverySpecification:
         PointInTimeRecoveryEnabled: true
       SSESpecification:
@@ -66,6 +83,9 @@ Resources:
       CodeUri: ./
       Handler: lambda-handler.handler
       Description: 'UKFF Slack Bot for Fantasy Football Draft Management'
+      # More memory (and proportional CPU) keeps cold-start init within the
+      # interactive Slack request budget. The scheduled functions inherit 256.
+      MemorySize: 512
       Environment:
         Variables:
           NODE_ENV: production
