@@ -38,13 +38,35 @@ async function analyzeLeagueRosters(leagueId) {
 
         console.log(`[ROSTER_ANALYZER] Analyzing league ${leagueId} for season ${currentSeason}, week ${currentWeek}`);
 
-        // Get league data and bye weeks/schedule data in parallel
-        const [rosters, users, byeWeeks, weekSchedule] = await Promise.all([
+        // Fetch rosters and supporting data in parallel. Rosters are required;
+        // the rest degrade gracefully so a single transient upstream failure
+        // doesn't sink the entire analysis.
+        const [rostersResult, usersResult, byeWeeksResult, scheduleResult] = await Promise.allSettled([
             getLeagueRosters(leagueId),
             getLeagueUsers(leagueId),
             getNflByeWeeksWithCache(currentSeason),
             getNflScheduleWithCache(currentSeason, currentWeek)
         ]);
+
+        if (rostersResult.status !== 'fulfilled' || !rostersResult.value) {
+            throw new Error(`Unable to load rosters for league ${leagueId}: ${rostersResult.reason?.message || 'no roster data'}`);
+        }
+        const rosters = rostersResult.value;
+
+        const users = (usersResult.status === 'fulfilled' && Array.isArray(usersResult.value)) ? usersResult.value : [];
+        if (usersResult.status !== 'fulfilled') {
+            console.warn(`[ROSTER_ANALYZER] Failed to load league users; owner names unavailable this run: ${usersResult.reason?.message}`);
+        }
+
+        const byeWeeks = (byeWeeksResult.status === 'fulfilled' && byeWeeksResult.value) ? byeWeeksResult.value : {};
+        if (byeWeeksResult.status !== 'fulfilled') {
+            console.warn(`[ROSTER_ANALYZER] Failed to load bye weeks; bye detection disabled this run: ${byeWeeksResult.reason?.message}`);
+        }
+
+        const weekSchedule = (scheduleResult.status === 'fulfilled' && Array.isArray(scheduleResult.value)) ? scheduleResult.value : [];
+        if (scheduleResult.status !== 'fulfilled') {
+            console.warn(`[ROSTER_ANALYZER] Failed to load week schedule; already-played filtering disabled this run: ${scheduleResult.reason?.message}`);
+        }
 
         // Create user lookup map
         const userMap = {};
