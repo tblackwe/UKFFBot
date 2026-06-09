@@ -60,8 +60,8 @@ jobs:
           unzip aws-sam-cli-linux-x86_64.zip -d sam-installation
           sudo ./sam-installation/install
           
-          # Validate template
-          sam validate --template template.yaml
+          # Validate template (newer SAM CLI requires an explicit region)
+          sam validate --template template.yaml --region us-east-1
 
   # Determine deployment environment and strategy
   determine-environment:
