@@ -19,6 +19,14 @@ Parameters:
     AllowedValues: [dev, staging, prod]
     Description: Environment name
 
+  AlarmEmail:
+    Type: String
+    Default: ''
+    Description: Optional email address to subscribe to Lambda error alarms (leave blank to skip)
+
+Conditions:
+  HasAlarmEmail: !Not [!Equals [!Ref AlarmEmail, '']]
+
 Globals:
   Function:
     Runtime: nodejs22.x
@@ -289,6 +297,80 @@ Resources:
           ]
         }
 
+  # SNS topic for operational alarms
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      TopicName: !Sub 'ukff-alarms-${Environment}'
+      DisplayName: 'UKFFBot Alarms'
+
+  # Optional email subscription (only created when AlarmEmail is provided)
+  AlarmEmailSubscription:
+    Type: AWS::SNS::Subscription
+    Condition: HasAlarmEmail
+    Properties:
+      TopicArn: !Ref AlarmTopic
+      Protocol: email
+      Endpoint: !Ref AlarmEmail
+
+  # Error alarms — surface Lambda failures that would otherwise only land in logs
+  SlackBotErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'ukff-slack-bot-errors-${Environment}'
+      AlarmDescription: 'Slack bot Lambda reported one or more errors'
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref SlackBotFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+
+  DraftMonitorErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'ukff-draft-monitor-errors-${Environment}'
+      AlarmDescription: 'Draft monitor Lambda reported one or more errors'
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref DraftMonitorFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+
+  RosterSchedulerErrorAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmName: !Sub 'ukff-roster-scheduler-errors-${Environment}'
+      AlarmDescription: 'Roster scheduler Lambda reported one or more errors'
+      Namespace: AWS/Lambda
+      MetricName: Errors
+      Dimensions:
+        - Name: FunctionName
+          Value: !Ref RosterSchedulerFunction
+      Statistic: Sum
+      Period: 300
+      EvaluationPeriods: 1
+      Threshold: 1
+      ComparisonOperator: GreaterThanOrEqualToThreshold
+      TreatMissingData: notBreaching
+      AlarmActions:
+        - !Ref AlarmTopic
+
 Outputs:
   SlackBotApiUrl:
     Description: 'API Gateway endpoint URL for Slack events'
@@ -319,3 +401,9 @@ Outputs:
     Value: !GetAtt RosterSchedulerFunction.Arn
     Export:
       Name: !Sub '${AWS::StackName}-RosterSchedulerFunctionArn'
+
+  AlarmTopicArn:
+    Description: 'SNS topic ARN for operational alarms (subscribe here if no AlarmEmail was set)'
+    Value: !Ref AlarmTopic
+    Export:
+      Name: !Sub '${AWS::StackName}-AlarmTopicArn'
