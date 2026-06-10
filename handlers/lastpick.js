@@ -35,7 +35,9 @@ async function generatePickMessagePayload(draft, picks, data, notifyNextPicker =
   // --- Logic to determine the next picker ---
   let nextPickerMessage = "The draft is complete!";
   const picksMade = picks.length;
-  const totalTeams = Object.keys(draft.draft_order).length; // Number of teams in the draft
+  // Prefer settings.teams (always correct). draft_order only lists real users, so in
+  // a mock draft it holds just the single human, which breaks team-count math.
+  const totalTeams = draft.settings.teams || Object.keys(draft.draft_order).length;
   // Calculate the total number of picks based on rounds and teams
   const totalPicks = draft.settings.rounds * totalTeams;
   if (picksMade < totalPicks) {
