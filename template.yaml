@@ -199,10 +199,8 @@ Resources:
     Properties:
       Name: !Sub 'ukff-slack-bot-api-${Environment}'
       StageName: !Ref Environment
-      Cors:
-        AllowMethods: "'POST, OPTIONS'"
-        AllowHeaders: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
-        AllowOrigin: "'*'"
+      # No CORS: this is a server-to-server Slack webhook (signature-verified),
+      # not a browser-facing API, so CORS headers serve no purpose.
       EndpointConfiguration:
         Type: REGIONAL
       TracingEnabled: true

@@ -30,7 +30,7 @@
     },
     "settings": {
         "event_subscriptions": {
-            "request_url": "https://ij73zmabnj.execute-api.us-east-1.amazonaws.com/prod/slack/events",
+            "request_url": "https://YOUR_API_GATEWAY_URL/slack/events",
             "bot_events": [
                 "app_home_opened",
                 "app_mention",
@@ -39,7 +39,7 @@
         },
         "interactivity": {
             "is_enabled": true,
-            "request_url": "https://ij73zmabnj.execute-api.us-east-1.amazonaws.com/prod/slack/events"
+            "request_url": "https://YOUR_API_GATEWAY_URL/slack/events"
         },
         "org_deploy_enabled": false,
         "socket_mode_enabled": false,
