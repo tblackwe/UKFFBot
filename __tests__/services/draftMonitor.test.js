@@ -63,6 +63,62 @@ describe('Draft Monitor Service', () => {
         expect(datastore.saveDraft).toHaveBeenCalledWith(draftId, channelId, 2);
     });
 
+    it('should post multiple messages and notify only the last picker when multiple new picks are detected', async () => {
+        // Arrange
+        const draftId = 'draft123';
+        const channelId = 'C123';
+        const mockData = {
+            drafts: {
+                [draftId]: {
+                    slack_channel_id: channelId,
+                    last_known_pick_count: 1,
+                },
+            },
+            player_map: {},
+        };
+        const mockPicks = [{ pick_no: 1 }, { pick_no: 2 }, { pick_no: 3 }]; // New pick count is 3 (2 new picks: 2 and 3)
+        const mockDraft = { draft_order: {}, settings: {} };
+        const mockMessagePayload1 = { text: 'Pick 2!', blocks: [] };
+        const mockMessagePayload2 = { text: 'Pick 3!', blocks: [] };
+
+        datastore.getData.mockResolvedValue(mockData);
+        sleeper.getDraftPicks.mockResolvedValue(mockPicks);
+        sleeper.getDraft.mockResolvedValue(mockDraft);
+        
+        generatePickMessagePayload
+            .mockReturnValueOnce(mockMessagePayload1)
+            .mockReturnValueOnce(mockMessagePayload2);
+            
+        datastore.saveData.mockResolvedValue();
+
+        // Act
+        await checkDraftForUpdates(mockApp);
+
+        // Assert
+        expect(datastore.getData).toHaveBeenCalledTimes(1);
+        expect(sleeper.getDraftPicks).toHaveBeenCalledWith(draftId);
+        expect(sleeper.getDraft).toHaveBeenCalledWith(draftId);
+        
+        // Should generate payload for pick 2 (slice of length 2) with notifyNextPicker = false
+        expect(generatePickMessagePayload).toHaveBeenNthCalledWith(1, mockDraft, [{ pick_no: 1 }, { pick_no: 2 }], mockData, false);
+        
+        // Should generate payload for pick 3 (slice of length 3) with notifyNextPicker = true
+        expect(generatePickMessagePayload).toHaveBeenNthCalledWith(2, mockDraft, [{ pick_no: 1 }, { pick_no: 2 }, { pick_no: 3 }], mockData, true);
+
+        expect(mockApp.client.chat.postMessage).toHaveBeenCalledTimes(2);
+        expect(mockApp.client.chat.postMessage).toHaveBeenNthCalledWith(1, {
+            channel: channelId,
+            ...mockMessagePayload1,
+        });
+        expect(mockApp.client.chat.postMessage).toHaveBeenNthCalledWith(2, {
+            channel: channelId,
+            ...mockMessagePayload2,
+        });
+        
+        expect(datastore.saveDraft).toHaveBeenCalledTimes(1);
+        expect(datastore.saveDraft).toHaveBeenCalledWith(draftId, channelId, 3);
+    });
+
     it('should do nothing if no new picks are found', async () => {
         // Arrange
         const draftId = 'draft123';

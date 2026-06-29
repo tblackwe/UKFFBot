@@ -46,13 +46,17 @@ async function checkDraftForUpdates(app) {
                     console.log(`Draft Monitor: New pick detected in draft ${draftId}! Pick count changed from ${lastKnownPickCount} to ${currentPickCount}.`);
                 }
 
-                // Generate the message payload using the reusable function
-                const messagePayload = await generatePickMessagePayload(draft, picks, data, notifyNextPicker = true);
-                // Post the message to the registered channel
-                await app.client.chat.postMessage({
-                    channel: draftInfo.slack_channel_id,
-                    ...messagePayload
-                });
+                // Send all the picks since the last one sent
+                for (let i = lastKnownPickCount; i < currentPickCount; i++) {
+                    const partialPicks = picks.slice(0, i + 1);
+                    const shouldNotify = (i === currentPickCount - 1);
+                    const messagePayload = await generatePickMessagePayload(draft, partialPicks, data, shouldNotify);
+                    // Post the message to the registered channel
+                    await app.client.chat.postMessage({
+                        channel: draftInfo.slack_channel_id,
+                        ...messagePayload
+                    });
+                }
 
                 // Add to the list of drafts to update
                 draftsToUpdate.push({
