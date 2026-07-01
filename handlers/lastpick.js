@@ -110,6 +110,7 @@ async function generatePickMessagePayload(draft, picks, data, notifyNextPicker =
 
   const playerName = `${lastPick.metadata.first_name} ${lastPick.metadata.last_name}`;
   const playerPosition = lastPick.metadata.position || 'N/A';
+  const playerTeam = lastPick.metadata.team || 'N/A';
 
   // Calculate pick number within the round, e.g., 1.01, 4.12
   const pickInRound = ((lastPick.pick_no - 1) % totalTeams) + 1;
@@ -117,8 +118,8 @@ async function generatePickMessagePayload(draft, picks, data, notifyNextPicker =
 
   // Create the fallback text for the message
   const fallbackText = picksMade < totalPicks 
-    ? `Pick ${formattedPick}: ${playerName} (${playerPosition}) was selected by ${lastPickerName}. Next up: ${nextPickerMessage}`
-    : `Pick ${formattedPick}: ${playerName} (${playerPosition}) was selected by ${lastPickerName}. The draft is complete!`;
+    ? `Pick ${formattedPick}: ${playerName} (${playerPosition} - ${playerTeam}) was selected by ${lastPickerName}. Next up: ${nextPickerMessage}`
+    : `Pick ${formattedPick}: ${playerName} (${playerPosition} - ${playerTeam}) was selected by ${lastPickerName}. The draft is complete!`;
 
   return {
     text: fallbackText, // This is the required fallback text
@@ -132,6 +133,7 @@ async function generatePickMessagePayload(draft, picks, data, notifyNextPicker =
         "fields": [
           { "type": "mrkdwn", "text": `*Pick:* \`${formattedPick}\`` },
           { "type": "mrkdwn", "text": `*Player:* \`${playerName} - ${playerPosition}\`` },
+          { "type": "mrkdwn", "text": `*Team:* \`${playerTeam}\`` },
           { "type": "mrkdwn", "text": `*Picked By:* ${lastPickerName}` }
         ]
       },

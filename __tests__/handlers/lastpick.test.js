@@ -1,4 +1,4 @@
-const { handleLastPickCommand } = require('../../handlers/lastpick.js');
+const { handleLastPickCommand, generatePickMessagePayload } = require('../../handlers/lastpick.js');
 const datastore = require('../../services/datastore.js');
 const sleeper = require('../../services/sleeper.js');
 
@@ -51,16 +51,16 @@ describe('handleLastPickCommand', () => {
         expect(sleeper.getDraft).toHaveBeenCalledWith('draft123');
         expect(sleeper.getDraftPicks).toHaveBeenCalledWith('draft123');
         expect(say).toHaveBeenCalledTimes(1);
-        // Check that the message contains the blocks structure and text fallback
         expect(say).toHaveBeenCalledWith(expect.objectContaining({
             blocks: expect.arrayContaining([
                 expect.objectContaining({
                     fields: expect.arrayContaining([
-                        expect.objectContaining({ text: expect.stringContaining('*Pick:* `1.02`') })
+                        expect.objectContaining({ text: expect.stringContaining('*Pick:* `1.02`') }),
+                        expect.objectContaining({ text: expect.stringContaining('*Team:* `N/A`') })
                     ])
                 })
             ]),
-            text: expect.stringContaining("Pick 1.02: Player Two (N/A) was selected by slack_user2. Next up: slack_user2")
+            text: expect.stringContaining("Pick 1.02: Player Two (N/A - N/A) was selected by slack_user2. Next up: slack_user2")
         }));
     });
 
@@ -109,5 +109,83 @@ describe('handleLastPickCommand', () => {
         await handleLastPickCommand({ command, say });
 
         expect(say).toHaveBeenCalledWith(expect.stringContaining("Sorry, I couldn't fetch the draft details."));
+    });
+});
+
+describe('generatePickMessagePayload', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        datastore.getPlayer.mockResolvedValue(null);
+    });
+
+    it('should use settings.teams for totalTeams when defined', async () => {
+        const draft = {
+            type: 'snake',
+            settings: { rounds: 2, teams: 10 },
+            // Only 1 human in draft_order, but settings.teams says 10
+            draft_order: { 'user1': 1 },
+            status: 'in_progress'
+        };
+        const picks = [
+            { pick_no: 1, round: 1, metadata: { first_name: 'Player', last_name: 'One' }, picked_by: 'user1' }
+        ];
+        const data = {
+            player_map: { 'user1': 'slack_user1' }
+        };
+
+        const payload = await generatePickMessagePayload(draft, picks, data, false);
+        // Using settings.teams (10 teams) -> nextPickInRound = (1 % 10) + 1 = 2 (slot 2).
+        // Since draft_order only has slot 1, getUserForSlot(2) returns null -> next picker is 'User ID null'.
+        expect(payload.text).toContain('Next up: User ID null');
+    });
+
+    it('should fallback to draft_order length when settings.teams is not defined', async () => {
+        const draft = {
+            type: 'snake',
+            settings: { rounds: 2 },
+            draft_order: { 'user1': 1, 'user2': 2 },
+            status: 'in_progress'
+        };
+        const picks = [
+            { pick_no: 1, round: 1, metadata: { first_name: 'Player', last_name: 'One' }, picked_by: 'user1' }
+        ];
+        const data = {
+            player_map: { 'user1': 'slack_user1', 'user2': 'slack_user2' }
+        };
+
+        const payload = await generatePickMessagePayload(draft, picks, data, false);
+        // Falling back to draft_order length (2 teams) -> nextPickInRound = (1 % 2) + 1 = 2 (slot 2).
+        // getUserForSlot(2) returns 'user2', mapping to 'slack_user2'.
+        expect(payload.text).toContain('Next up: slack_user2');
+    });
+
+    it('should correctly include and format the player team when defined in metadata', async () => {
+        const draft = {
+            type: 'snake',
+            settings: { rounds: 2, teams: 2 },
+            draft_order: { 'user1': 1, 'user2': 2 },
+            status: 'in_progress'
+        };
+        const picks = [
+            { pick_no: 1, round: 1, metadata: { first_name: 'Christian', last_name: 'McCaffrey', position: 'RB', team: 'SF' }, picked_by: 'user1' }
+        ];
+        const data = {
+            player_map: { 'user1': 'slack_user1' }
+        };
+
+        const payload = await generatePickMessagePayload(draft, picks, data, false);
+        
+        // Assert the fallback text uses the correct format: "(RB - SF)"
+        expect(payload.text).toContain('Christian McCaffrey (RB - SF) was selected by slack_user1');
+        
+        // Assert the blocks contain the team name SF
+        expect(payload.blocks).toEqual(expect.arrayContaining([
+            expect.objectContaining({
+                type: 'section',
+                fields: expect.arrayContaining([
+                    expect.objectContaining({ text: '*Team:* `SF`', type: 'mrkdwn' })
+                ])
+            })
+        ]));
     });
 });
