@@ -132,9 +132,10 @@ async function generatePickMessagePayload(draft, picks, data, notifyNextPicker =
         "type": "section",
         "fields": [
           { "type": "mrkdwn", "text": `*Pick:* \`${formattedPick}\`` },
+          { "type": "mrkdwn", "text": `*Picked By:* ${lastPickerName}` },
           { "type": "mrkdwn", "text": `*Player:* \`${playerName} - ${playerPosition}\`` },
-          { "type": "mrkdwn", "text": `*Team:* \`${playerTeam}\`` },
-          { "type": "mrkdwn", "text": `*Picked By:* ${lastPickerName}` }
+          { "type": "mrkdwn", "text": `*Team:* \`${playerTeam}\`` }
+          
         ]
       },
       { "type": "divider" },
