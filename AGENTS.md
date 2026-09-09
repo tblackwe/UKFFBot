@@ -10,7 +10,7 @@ Fantasy football Slack bot integrating with Sleeper API for draft monitoring and
 - **Production**: `lambda-handler.js` - HTTP mode via API Gateway (no app token needed)
 - **Background Jobs**: 
   - `lambda-draft-monitor.js` - Checks drafts every minute
-  - `lambda-roster-scheduler.js` - Runs roster checks Thu/Sun/Mon on schedule
+  - `lambda-roster-scheduler.js` - Polls every 30 minutes; roster check once at T-3h on NFL game days
 
 ### DynamoDB Data Model (Single Table Design)
 Uses composite keys `PK` (partition) and `SK` (sort) for all entities:
@@ -25,8 +25,11 @@ Uses composite keys `PK` (partition) and `SK` (sort) for all entities:
 // Leagues: PK='LEAGUE', SK='LEAGUE#<league_id>'
 { leagueId, slackChannelId, leagueName, season, sport, totalRosters, status }
 
-// Cache: PK='CACHE', SK='NFL_PLAYERS#<sport>' or 'BYE_WEEKS#<season>'
+// Cache: PK='NFL_CACHE', SK='BYE_WEEKS#<season>' | 'SCHEDULE#<season>#<week>' | 'PLAYERS#NFL'
 { data, ttl, lastUpdated }
+
+// Scheduler lock: PK='SCHEDULER', SK='ROSTER_CHECK#<YYYY-MM-DD>'
+{ claimedAt, ttl }
 ```
 
 **Critical**: Always use exact PK/SK prefixes. No GSI - use scans for channel-based queries.

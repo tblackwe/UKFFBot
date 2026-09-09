@@ -765,6 +765,53 @@ async function getNflPlayers(sport = 'nfl') {
     }
 }
 
+/**
+ * Claim the once-per-day roster-check lock for an Eastern calendar date.
+ * @param {string} etDate YYYY-MM-DD
+ * @returns {Promise<boolean>} true if this caller won the lock
+ */
+async function tryClaimRosterCheck(etDate) {
+    try {
+        await docClient.send(new PutCommand({
+            TableName: TABLE_NAME,
+            Item: {
+                PK: 'SCHEDULER',
+                SK: `ROSTER_CHECK#${etDate}`,
+                claimedAt: new Date().toISOString(),
+                ttl: Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60)
+            },
+            ConditionExpression: 'attribute_not_exists(PK)'
+        }));
+        return true;
+    } catch (error) {
+        if (error.name === 'ConditionalCheckFailedException') {
+            return false;
+        }
+        console.error(`Error claiming roster-check lock for ${etDate}:`, error);
+        throw error;
+    }
+}
+
+/**
+ * Drop the roster-check lock so a later poll can retry after a failed run.
+ * @param {string} etDate YYYY-MM-DD
+ * @returns {Promise<void>}
+ */
+async function releaseRosterCheck(etDate) {
+    try {
+        await docClient.send(new DeleteCommand({
+            TableName: TABLE_NAME,
+            Key: {
+                PK: 'SCHEDULER',
+                SK: `ROSTER_CHECK#${etDate}`
+            }
+        }));
+    } catch (error) {
+        console.error(`Error releasing roster-check lock for ${etDate}:`, error);
+        throw error;
+    }
+}
+
 module.exports = {
     getData,
     saveData,
@@ -784,5 +831,7 @@ module.exports = {
     saveNflSchedule,
     getNflSchedule,
     saveNflPlayers,
-    getNflPlayers
+    getNflPlayers,
+    tryClaimRosterCheck,
+    releaseRosterCheck
 };

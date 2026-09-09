@@ -1,50 +1,78 @@
-const { getAllChannelsWithLeagues } = require('./services/datastore.js');
+const { getAllChannelsWithLeagues, releaseRosterCheck } = require('./services/datastore.js');
+const { evaluateRosterCheck } = require('./services/rosterScheduler.js');
 const { analyzeLeagueRosters, formatAnalysisMessage } = require('./services/rosterAnalyzer.js');
+const logger = require('./shared/logger.js');
 const { WebClient } = require('@slack/web-api');
 
 // Initialize Slack client
 const slack = new WebClient(process.env.SLACK_BOT_TOKEN);
 
 /**
- * Lambda handler for scheduled roster checking
- * Automatically runs roster analysis on all registered leagues
+ * AWS Lambda handler for scheduled roster checking.
+ * EventBridge invokes this every 30 minutes; the gate posts to Slack at most
+ * once per Eastern calendar day, 3 hours before that day's first kickoff.
  */
 exports.handler = async (event) => {
-    console.log('Starting scheduled roster check...', JSON.stringify(event, null, 2));
-    
+    logger.info('Roster scheduler poll', { event });
+
+    const decision = await evaluateRosterCheck();
+    if (!decision.shouldRun) {
+        logger.info('Roster check skipped', {
+            reason: decision.reason,
+            etDate: decision.etDate,
+            firstKickoff: decision.firstKickoff
+        });
+        return {
+            statusCode: 200,
+            body: JSON.stringify({
+                message: `skipped: ${decision.reason}`,
+                etDate: decision.etDate || null
+            })
+        };
+    }
+
+    logger.info('Roster check window open', {
+        etDate: decision.etDate,
+        firstKickoff: decision.firstKickoff && decision.firstKickoff.toISOString(),
+        season: decision.season,
+        week: decision.week
+    });
+
     try {
-        // Get all channels that have registered leagues
         const channelsWithLeagues = await getAllChannelsWithLeagues();
-        
+
         if (channelsWithLeagues.length === 0) {
-            console.log('No channels with registered leagues found');
+            logger.info('No channels with registered leagues found');
             return {
                 statusCode: 200,
                 body: JSON.stringify({ message: 'No channels with leagues to check' })
             };
         }
 
-        console.log(`Found ${channelsWithLeagues.length} channels with leagues`);
+        logger.info('Found channels with leagues', { count: channelsWithLeagues.length });
 
-        // Process each channel
         for (const { channelId, leagues } of channelsWithLeagues) {
             try {
                 await processChannelRosters(channelId, leagues);
             } catch (error) {
-                console.error(`Error processing channel ${channelId}:`, error);
-                // Continue with other channels even if one fails
+                logger.error('Error processing channel', { channelId, error });
             }
         }
 
         return {
             statusCode: 200,
-            body: JSON.stringify({ 
-                message: `Roster check completed for ${channelsWithLeagues.length} channels`
+            body: JSON.stringify({
+                message: `Roster check completed for ${channelsWithLeagues.length} channels`,
+                etDate: decision.etDate
             })
         };
-
     } catch (error) {
-        console.error('Error in scheduled roster check:', error);
+        logger.error('Error in scheduled roster check', { error, etDate: decision.etDate });
+        try {
+            await releaseRosterCheck(decision.etDate);
+        } catch (releaseError) {
+            logger.error('Failed to release roster-check lock after error', { error: releaseError, etDate: decision.etDate });
+        }
         return {
             statusCode: 500,
             body: JSON.stringify({ error: error.message })
@@ -56,10 +84,9 @@ exports.handler = async (event) => {
  * Process roster analysis for a specific channel
  */
 async function processChannelRosters(channelId, leagues) {
-    console.log(`Processing rosters for channel ${channelId} with ${leagues.length} leagues`);
+    logger.info('Processing rosters for channel', { channelId, leagueCount: leagues.length });
 
     try {
-        // Send initial message directly to channel (no thread)
         await slack.chat.postMessage({
             channel: channelId,
             text: '🔍 Automated Roster Check - Analyzing rosters for issues...',
@@ -74,18 +101,15 @@ async function processChannelRosters(channelId, leagues) {
             ]
         });
 
-        // Analyze each league
         for (const league of leagues) {
             try {
-                console.log(`Analyzing league ${league.leagueId} (${league.leagueName})`);
-                
+                logger.info('Analyzing league', { leagueId: league.leagueId, leagueName: league.leagueName });
+
                 const analysis = await analyzeLeagueRosters(league.leagueId);
                 const messageData = formatAnalysisMessage(analysis);
-                
-                // Add league header to the text content
+
                 const leagueHeaderText = `**${league.leagueName}** (${league.season})`;
-                
-                // Create header block
+
                 const headerBlock = {
                     type: "section",
                     text: {
@@ -93,16 +117,14 @@ async function processChannelRosters(channelId, leagues) {
                         text: `*${league.leagueName}* (${league.season})`
                     }
                 };
-                
-                // Post each league's results directly to channel (no thread)
+
                 await slack.chat.postMessage({
                     channel: channelId,
                     text: leagueHeaderText + '\n' + messageData.text,
                     blocks: [headerBlock, { type: "divider" }, ...messageData.blocks]
                 });
-                
             } catch (error) {
-                console.error(`Error analyzing league ${league.leagueId}:`, error);
+                logger.error('Error analyzing league', { leagueId: league.leagueId, error });
                 await slack.chat.postMessage({
                     channel: channelId,
                     text: `❌ Failed to analyze league "${league.leagueName}": ${error.message}`,
@@ -119,7 +141,6 @@ async function processChannelRosters(channelId, leagues) {
             }
         }
 
-        // Send completion message directly to channel (no thread)
         await slack.chat.postMessage({
             channel: channelId,
             text: '✅ Automated roster analysis complete!',
@@ -133,18 +154,16 @@ async function processChannelRosters(channelId, leagues) {
                 }
             ]
         });
-
     } catch (error) {
-        console.error(`Error processing channel ${channelId}:`, error);
-        
-        // Try to send error message to channel if possible
+        logger.error('Error processing channel', { channelId, error });
+
         try {
             await slack.chat.postMessage({
                 channel: channelId,
                 text: `❌ Automated roster check failed: ${error.message}`
             });
         } catch (slackError) {
-            console.error('Failed to send error message to Slack:', slackError);
+            logger.error('Failed to send error message to Slack', { error: slackError });
         }
     }
 }

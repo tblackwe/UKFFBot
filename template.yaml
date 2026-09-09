@@ -154,32 +154,17 @@ Resources:
       FunctionName: !Sub 'ukff-roster-scheduler-${Environment}'
       CodeUri: ./
       Handler: lambda-roster-scheduler.handler
-      Description: 'UKFF Roster Scheduler - Automatically checks rosters on scheduled days'
+      Description: 'UKFF Roster Scheduler - Polls ESPN kickoffs; runs once at T-3h on game days'
       Timeout: 300
       Environment:
         Variables:
           NODE_ENV: production
       Events:
-        # Thursday at 5 PM (17:00 PM UTC)
-        ThursdayNoonSchedule:
+        RosterCheckPoll:
           Type: Schedule
           Properties:
-            Schedule: cron(0 17 ? * THU *)
-            Description: 'Check rosters every Thursday at 5 PM'
-            Enabled: true
-        # Sunday at 11 AM (11:00 AM UTC)
-        SundayMorningSchedule:
-          Type: Schedule
-          Properties:
-            Schedule: cron(0 11 ? * SUN *)
-            Description: 'Check rosters every Sunday at 11 AM'
-            Enabled: true
-        # Monday at 5 PM (17:00 PM UTC)
-        MondayNoonSchedule:
-          Type: Schedule
-          Properties:
-            Schedule: cron(0 17 ? * MON *)
-            Description: 'Check rosters every Monday at 5 PM'
+            Schedule: rate(30 minutes)
+            Description: 'Clock-check ESPN kickoffs; run roster check once at T-3h on game days'
             Enabled: true
       Policies:
         - DynamoDBCrudPolicy:

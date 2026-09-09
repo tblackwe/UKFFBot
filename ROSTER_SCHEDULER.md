@@ -1,83 +1,69 @@
-# Roster Scheduler Deployment
+# Roster Scheduler
 
-This document describes the automated roster checking feature that runs on scheduled intervals.
+Automated roster checking for every NFL game day.
 
-## Overview
+## When it runs
 
-The roster scheduler automatically runs the "check rosters" command for all registered leagues on:
-- **Thursdays at 12:00 PM UTC**
-- **Sundays at 6:00 AM UTC** 
-- **Mondays at 12:00 PM UTC**
+EventBridge invokes `ukff-roster-scheduler-{env}` **every 30 minutes**. Most polls
+no-op. A Slack roster check is posted only when:
 
-## Components Added
+1. ESPN shows at least one regular-season (or postseason) game on **today’s America/New_York date**
+2. Wall-clock time is at or after **3 hours before that day’s first kickoff**, and still before kickoff
+3. DynamoDB has no `SCHEDULER` / `ROSTER_CHECK#YYYY-MM-DD` lock for that Eastern date
 
-### 1. Lambda Function: `lambda-roster-scheduler.js`
-- New Lambda function that handles scheduled roster checking
-- Uses the existing roster analysis logic from `handlers/checkRosters.js`
+So Thursday night, Friday internationals, Saturday, Sunday, and Monday night all
+work without hardcoded weekdays. If the NFL flexes a game to another day, the next
+poll reads ESPN and uses the new `start_time`.
+
+A poll is at most 30 minutes late (about 2.5 hours before kickoff). After a
+successful post, that Eastern date will not run again. If the Lambda throws before
+it finishes, the lock is released so a later poll can retry until kickoff.
+
+## Components
+
+### 1. Lambda: `lambda-roster-scheduler.js`
+- Gate: `services/rosterScheduler.js` (ESPN kickoffs + ET calendar + lock)
+- Analysis: existing `analyzeLeagueRosters` / `formatAnalysisMessage`
 - Posts results directly to Slack channels (not in threads)
-- Posts separate messages for each league analysis
 
-### 2. Database Function: `getAllChannelsWithLeagues()`
-- Added to `services/datastore.js`
-- Retrieves all channels that have registered leagues
-- Groups leagues by channel for efficient processing
+### 2. Datastore
+- `getAllChannelsWithLeagues()` — channels that have registered leagues
+- `tryClaimRosterCheck(etDate)` / `releaseRosterCheck(etDate)` — once-per-day lock
 
-### 3. CloudFormation Updates: `template.yaml`
-- Added `RosterSchedulerFunction` Lambda function
-- Configured three CloudWatch Events rules for scheduling
-- Added corresponding log group and monitoring
+### 3. CloudFormation: `template.yaml`
+- `RosterSchedulerFunction` with `rate(30 minutes)`
+- Log group and error alarm
 
-## Deployment Steps
+## Deployment
 
-1. **Deploy the updated stack:**
-   ```bash
-   ./deploy.sh
-   ```
+```bash
+./deploy.sh
+```
 
-2. **Verify deployment:**
-   - Check AWS Console for the new Lambda function
-   - Verify CloudWatch Events rules are created and enabled
-   - Monitor CloudWatch Logs for any errors
-
-## Schedule Details
-
-The cron expressions used:
-- Thursday noon: `cron(0 12 ? * THU *)`
-- Sunday 6 AM: `cron(0 6 ? * SUN *)`
-- Monday noon: `cron(0 12 ? * MON *)`
-
-All times are in UTC. Adjust if you need different timezones.
+Confirm the old Thu/Sun/Mon cron rules are gone and `RosterCheckPoll` is enabled.
 
 ## Testing
 
-To test the scheduler locally:
 ```bash
-node test-roster-scheduler.js
+npm test
+```
+
+Gate tests live in `__tests__/services/rosterScheduler.gate.test.js`.
+
+To invoke the Lambda locally (will hit ESPN + DynamoDB):
+
+```bash
+sam local invoke RosterSchedulerFunction -e event.json
 ```
 
 ## Monitoring
 
-The function is included in the CloudWatch dashboard with metrics for:
-- Invocations
-- Errors
-- Duration
+CloudWatch dashboard includes invocations, errors, and duration.
 
-Log groups:
-- `/aws/lambda/ukff-roster-scheduler-{Environment}`
+Log group: `/aws/lambda/ukff-roster-scheduler-{Environment}`
 
-## Troubleshooting
+Skip reasons in logs: `off_season`, `no_games`, `too_early`, `too_late`, `already_ran`, `nfl_state_error`, `schedule_error`.
 
-Common issues:
-1. **No channels found**: Ensure leagues are properly registered
-2. **Slack API errors**: Check bot token permissions
-3. **Timeout issues**: Function has 5-minute timeout for processing multiple leagues
+## Disabling / changing cadence
 
-## Disabling/Enabling
-
-To disable the scheduler:
-1. Set `Enabled: false` in the CloudWatch Events in `template.yaml`
-2. Redeploy
-
-To change schedule:
-1. Update the cron expressions in `template.yaml`
-2. Redeploy
+Set `Enabled: false` on `RosterCheckPoll` in `template.yaml`, or change `rate(30 minutes)`, then redeploy.
