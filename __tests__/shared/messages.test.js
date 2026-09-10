@@ -10,7 +10,7 @@ describe('handleCommandError', () => {
     });
 
     afterEach(() => {
-        errorSpy.mockRestore();
+        jest.restoreAllMocks();
     });
 
     test('logs the command name and replies with the default configuration error', async () => {

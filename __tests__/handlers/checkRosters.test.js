@@ -14,6 +14,10 @@ describe('checkRosters handler', () => {
         jest.clearAllMocks();
     });
 
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
     test('should handle no registered leagues', async () => {
         getLeaguesByChannel.mockResolvedValue([]);
 
@@ -119,7 +123,7 @@ describe('checkRosters handler', () => {
     });
 
     test('should notify the user when loading leagues fails', async () => {
-        const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+        jest.spyOn(console, 'error').mockImplementation(() => {});
         getLeaguesByChannel.mockRejectedValue(new Error('DynamoDB down'));
 
         const command = {
@@ -133,11 +137,10 @@ describe('checkRosters handler', () => {
             text: ERROR_MESSAGES.CONFIGURATION_ERROR,
             thread_ts: '1234567890.123456'
         });
-        errorSpy.mockRestore();
     });
 
     test('should notify the user when a specific league check fails for a non-404 error', async () => {
-        const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+        jest.spyOn(console, 'error').mockImplementation(() => {});
         analyzeLeagueRosters.mockRejectedValue(new Error('timeout'));
 
         const command = {
@@ -152,6 +155,5 @@ describe('checkRosters handler', () => {
             text: ERROR_MESSAGES.CONFIGURATION_ERROR,
             thread_ts: '1234567890.123456'
         });
-        errorSpy.mockRestore();
     });
 });

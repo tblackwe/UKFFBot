@@ -12,6 +12,10 @@ describe('listLeagues handler', () => {
         jest.clearAllMocks();
     });
 
+    afterEach(() => {
+        jest.restoreAllMocks();
+    });
+
     test('should list leagues registered to the channel', async () => {
         getLeaguesByChannel.mockResolvedValue([
             {
@@ -37,7 +41,7 @@ describe('listLeagues handler', () => {
     });
 
     test('should notify the user when loading leagues fails', async () => {
-        const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+        jest.spyOn(console, 'error').mockImplementation(() => {});
         getLeaguesByChannel.mockRejectedValue(new Error('DynamoDB down'));
 
         await handleListLeaguesCommand({
@@ -49,6 +53,5 @@ describe('listLeagues handler', () => {
             text: ERROR_MESSAGES.CONFIGURATION_ERROR,
             thread_ts: '1.2'
         });
-        errorSpy.mockRestore();
     });
 });
