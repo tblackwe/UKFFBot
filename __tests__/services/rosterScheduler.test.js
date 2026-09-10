@@ -13,7 +13,11 @@ jest.mock('@aws-sdk/lib-dynamodb', () => ({
     DynamoDBDocumentClient: {
         from: jest.fn(() => mockDynamoDBDocumentClient)
     },
-    ScanCommand: jest.fn()
+    ScanCommand: jest.fn(),
+    DeleteCommand: jest.fn(),
+    GetCommand: jest.fn(),
+    PutCommand: jest.fn(),
+    QueryCommand: jest.fn()
 }));
 
 const { getAllChannelsWithLeagues } = require('../../services/datastore');

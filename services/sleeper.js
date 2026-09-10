@@ -201,10 +201,11 @@ const getNflState = () => {
  * Get NFL schedule for a specific week and season using ESPN API.
  * @param {string|number} season The season year (e.g., '2025' or 2025).
  * @param {number} week The week number.
+ * @param {number} [espnSeasonType=2] ESPN season type (2 = regular, 3 = postseason).
  * @returns {Promise<object[]>} Array of game objects for the week.
  */
-const getNflSchedule = async (season, week) => {
-    const url = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&seasontype=2&year=${season}`;
+const getNflSchedule = async (season, week, espnSeasonType = 2) => {
+    const url = `https://site.api.espn.com/apis/site/v2/sports/football/nfl/scoreboard?week=${week}&seasontype=${espnSeasonType}&year=${season}`;
 
     try {
         const response = await resilientFetch(url, { label: 'ESPN API' });

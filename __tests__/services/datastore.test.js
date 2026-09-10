@@ -22,7 +22,8 @@ jest.mock('@aws-sdk/lib-dynamodb', () => ({
     GetCommand: jest.fn(),
     PutCommand: jest.fn(),
     QueryCommand: jest.fn(),
-    ScanCommand: jest.fn()
+    ScanCommand: jest.fn(),
+    DeleteCommand: jest.fn()
 }));
 
 const {
@@ -42,10 +43,13 @@ const {
     saveNflByeWeeks,
     getNflByeWeeks,
     getNflSchedule,
-    getNflPlayers
+    getNflPlayers,
+    tryClaimRosterCheck,
+    markRosterCheckComplete,
+    releaseRosterCheck
 } = require('../../services/datastore.js');
 
-const { QueryCommand, ScanCommand } = require('@aws-sdk/lib-dynamodb');
+const { QueryCommand, ScanCommand, PutCommand } = require('@aws-sdk/lib-dynamodb');
 
 describe('DynamoDB Datastore Service', () => {
 
@@ -407,6 +411,51 @@ describe('DynamoDB Datastore Service', () => {
 
             mockSend.mockResolvedValueOnce({ Item: { players: {}, expiresAt: past } });
             await expect(getNflPlayers('nfl')).resolves.toBeNull();
+        });
+    });
+
+    describe('roster-check lock', () => {
+        it('tryClaimRosterCheck returns true on a fresh put', async () => {
+            mockSend.mockResolvedValue({});
+            await expect(tryClaimRosterCheck('2026-09-10')).resolves.toBe(true);
+            expect(mockSend).toHaveBeenCalledTimes(1);
+            expect(PutCommand).toHaveBeenCalledWith(expect.objectContaining({
+                Item: expect.objectContaining({
+                    PK: 'SCHEDULER',
+                    SK: 'ROSTER_CHECK#2026-09-10',
+                    status: 'in_progress'
+                }),
+                ConditionExpression: expect.stringContaining('#ttl < :now')
+            }));
+        });
+
+        it('tryClaimRosterCheck returns false when the lock already exists', async () => {
+            const error = new Error('The conditional request failed');
+            error.name = 'ConditionalCheckFailedException';
+            mockSend.mockRejectedValue(error);
+            await expect(tryClaimRosterCheck('2026-09-10')).resolves.toBe(false);
+        });
+
+        it('tryClaimRosterCheck rethrows unexpected errors', async () => {
+            mockSend.mockRejectedValue(new Error('DynamoDB down'));
+            await expect(tryClaimRosterCheck('2026-09-10')).rejects.toThrow('DynamoDB down');
+        });
+
+        it('releaseRosterCheck deletes the lock item', async () => {
+            mockSend.mockResolvedValue({});
+            await releaseRosterCheck('2026-09-10');
+            expect(mockSend).toHaveBeenCalledTimes(1);
+        });
+
+        it('markRosterCheckComplete writes a completed lock', async () => {
+            mockSend.mockResolvedValue({});
+            await markRosterCheckComplete('2026-09-10');
+            expect(PutCommand).toHaveBeenCalledWith(expect.objectContaining({
+                Item: expect.objectContaining({
+                    SK: 'ROSTER_CHECK#2026-09-10',
+                    status: 'completed'
+                })
+            }));
         });
     });
 });
