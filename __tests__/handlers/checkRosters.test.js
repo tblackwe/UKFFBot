@@ -1,11 +1,10 @@
-const { handleCheckRostersCommand } = require('../../handlers/checkRosters');
+const { handleCheckRostersCommand, handleCheckLeagueRostersCommand } = require('../../handlers/checkRosters');
 const { getLeaguesByChannel } = require('../../services/datastore');
 const { analyzeLeagueRosters } = require('../../services/rosterAnalyzer');
+const { ERROR_MESSAGES } = require('../../shared/messages');
 
-// Mock the dependencies
 jest.mock('../../services/datastore');
 jest.mock('../../services/rosterAnalyzer');
-jest.mock('../../shared/messages');
 
 describe('checkRosters handler', () => {
     let mockSay;
@@ -117,5 +116,42 @@ describe('checkRosters handler', () => {
             ]),
             thread_ts: '1234567890.123456'
         });
+    });
+
+    test('should notify the user when loading leagues fails', async () => {
+        const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+        getLeaguesByChannel.mockRejectedValue(new Error('DynamoDB down'));
+
+        const command = {
+            channel_id: 'C1234567890',
+            ts: '1234567890.123456'
+        };
+
+        await handleCheckRostersCommand({ command, say: mockSay });
+
+        expect(mockSay).toHaveBeenCalledWith({
+            text: ERROR_MESSAGES.CONFIGURATION_ERROR,
+            thread_ts: '1234567890.123456'
+        });
+        errorSpy.mockRestore();
+    });
+
+    test('should notify the user when a specific league check fails for a non-404 error', async () => {
+        const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+        analyzeLeagueRosters.mockRejectedValue(new Error('timeout'));
+
+        const command = {
+            text: '123456789',
+            channel_id: 'C1234567890',
+            ts: '1234567890.123456'
+        };
+
+        await handleCheckLeagueRostersCommand({ command, say: mockSay });
+
+        expect(mockSay).toHaveBeenCalledWith({
+            text: ERROR_MESSAGES.CONFIGURATION_ERROR,
+            thread_ts: '1234567890.123456'
+        });
+        errorSpy.mockRestore();
     });
 });

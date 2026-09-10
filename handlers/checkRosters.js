@@ -147,7 +147,7 @@ const handleCheckRostersCommand = async ({ command, say, ack }) => {
 
     } catch (error) {
         console.error('Error in handleCheckRostersCommand:', error);
-        await handleCommandError(threadedSay, error, 'checking rosters');
+        await handleCommandError('checking rosters', error, threadedSay);
     }
 };
 
@@ -280,7 +280,7 @@ const handleCheckLeagueRostersCommand = async ({ command, say, ack }) => {
                 await say(notFoundMessage);
             }
         } else {
-            await handleCommandError(threadedSay, error, 'checking league rosters');
+            await handleCommandError('checking league rosters', error, threadedSay);
         }
     }
 };
