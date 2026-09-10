@@ -199,7 +199,7 @@ const handleLastPickCommand = async ({ command, say, ack }) => {
       return;
     }
 
-    const messagePayload = await generatePickMessagePayload(draft, picks, data, notifyNextPicker = false);
+    const messagePayload = await generatePickMessagePayload(draft, picks, data, false);
     await say(messagePayload);
   } catch (error) {
     logError('/lastpick', error);

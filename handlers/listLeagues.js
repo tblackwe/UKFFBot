@@ -53,7 +53,7 @@ const handleListLeaguesCommand = async ({ command, say, ack }) => {
 
     } catch (error) {
         console.error('Error in handleListLeaguesCommand:', error);
-        await handleCommandError(threadedSay, error, 'listing leagues');
+        await handleCommandError('listing leagues', error, threadedSay);
     }
 };
 
