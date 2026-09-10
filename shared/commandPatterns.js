@@ -58,7 +58,7 @@ function createCommandPatterns(event, say, client = null) {
       }
     },
     { 
-      pattern: /^unregister\sdraft(.+)$/i, 
+      pattern: /^unregister\sdraft(.*)$/i, 
       handler: (remainingText) => {
         const commandPayload = createCommandPayload(remainingText, event.channel);
         return handleUnregisterDraftCommand({ command: commandPayload, say });

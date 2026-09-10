@@ -2,7 +2,7 @@ const { savePlayer } = require('../services/datastore.js');
 const { handleCommandError } = require('../shared/messages.js');
 const { getUserByUsername } = require('../services/sleeper.js');
 const { validateCommandArgs } = require('../shared/inputValidation.js');
-const { resolveSlackUser } = require('../services/slackUserService.js');
+const { resolveSlackUser, INVALID_SLACK_USER } = require('../services/slackUserService.js');
 
 /**
  * Handles the logic for the `register player` command.
@@ -21,7 +21,7 @@ const handleRegisterPlayerCommand = async ({ command, say, client, ack }) => {
     const validation = validateCommandArgs(
         args, 
         2, 
-        '`@YourBotName register player [sleeper_username] [@slack_user or slack_username]`'
+        '`@YourBotName register player [sleeper_username] [@slack_user]`'
     );
     
     if (!validation.isValid) {
@@ -46,6 +46,10 @@ const handleRegisterPlayerCommand = async ({ command, say, client, ack }) => {
         
         await say(`:white_check_mark: Successfully registered player. Sleeper username \`${sleeperUsername}\` (ID: \`${sleeperUser.user_id}\`) is now mapped to \`${slackName}\` (${slackMemberId}).`);
     } catch (error) {
+        if (error.code === INVALID_SLACK_USER) {
+            await say(error.message);
+            return;
+        }
         await handleCommandError('register player', error, say);
     }
 };

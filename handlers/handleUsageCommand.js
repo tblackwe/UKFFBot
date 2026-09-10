@@ -46,7 +46,7 @@ const handleUsageCommand = async ({ command, say, ack }) => {
                     },
                     {
                         "type": "mrkdwn",
-                        "text": "*`register player [sleeper_username] [@slack_user]`*\nRegister a player mapping for Sleeper username to Slack user. Ask Yukon for help if registration looks broken. Awaiting stimhack admin to fix permissions on username lookup."
+                        "text": "*`register player [sleeper_username] [@slack_user]`*\nMaps a Sleeper username to a Slack user for @-mentions. @mention the Slack user (plain names often fail). Or use the Register Player button on my App Home."
                     },
                     {
                         "type": "mrkdwn",
@@ -78,7 +78,14 @@ const handleUsageCommand = async ({ command, say, ack }) => {
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": "*Examples:*\n`@UKFFBot help`\n`register draft 987654321`\n`register league 123456789`\n`register player john_doe JohnDoe`\n`check rosters`\n`list leagues`\n`cache status`\n`last pick`"
+                    "text": "*Examples:*\n`@UKFFBot help`\n`register draft 987654321`\n`register league 123456789`\n`register player john_doe @JohnDoe`\n`check rosters`\n`list leagues`\n`cache status`\n`last pick`"
+                }
+            },
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": "*Also available:* Register a player or draft from my App Home. Admin commands `list drafts` and `update players` work in a DM with me."
                 }
             }
         ],

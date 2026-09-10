@@ -22,6 +22,7 @@ const { handleLastPickCommand } = require('../../handlers/lastpick.js');
 const { handleRegisterDraftCommand } = require('../../handlers/registerDraft.js');
 const { handleUsageCommand } = require('../../handlers/handleUsageCommand.js');
 const { handleCheckLeagueRostersCommand } = require('../../handlers/checkRosters.js');
+const { handleUnregisterDraftCommand } = require('../../handlers/unregisterDraft.js');
 const { handleListDraftsCommand } = require('../../handlers/listDrafts.js');
 const { handleUpdatePlayersCommand } = require('../../handlers/updatePlayers.js');
 
@@ -67,6 +68,11 @@ describe('commandPatterns', () => {
             expect(handleCheckLeagueRostersCommand).toHaveBeenCalledWith(
                 expect.objectContaining({ command: expect.objectContaining({ text: '555' }) })
             );
+        });
+
+        it('routes "unregister draft" with no extra text', async () => {
+            await handleAppMention(mention('unregister draft'));
+            expect(handleUnregisterDraftCommand).toHaveBeenCalled();
         });
 
         it('shows usage when the mention has no command text', async () => {

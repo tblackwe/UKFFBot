@@ -28,12 +28,26 @@ describe('inputValidation', () => {
             expect(result.isValidMemberId).toBe(true);
         });
 
+        it('accepts shorter and longer Slack member IDs', () => {
+            expect(parseSlackUserInput('U12345678').isValidMemberId).toBe(true);
+            expect(parseSlackUserInput('U0123456789AB').isValidMemberId).toBe(true);
+        });
+
         it('treats anything else as a username', () => {
             const result = parseSlackUserInput('alice');
             expect(result).toEqual({
                 memberId: 'alice',
                 isValidMemberId: false,
                 originalInput: 'alice'
+            });
+        });
+
+        it('strips a leading @ from a bare username', () => {
+            const result = parseSlackUserInput('@alice');
+            expect(result).toEqual({
+                memberId: 'alice',
+                isValidMemberId: false,
+                originalInput: '@alice'
             });
         });
 
