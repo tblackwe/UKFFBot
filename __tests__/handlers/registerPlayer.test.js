@@ -6,7 +6,10 @@ const sleeper = require('../../services/sleeper.js');
 jest.mock('../../services/datastore.js');
 jest.mock('../../services/sleeper.js');
 jest.mock('../../shared/inputValidation.js');
-jest.mock('../../services/slackUserService.js');
+jest.mock('../../services/slackUserService.js', () => ({
+    resolveSlackUser: jest.fn(),
+    INVALID_SLACK_USER: 'INVALID_SLACK_USER'
+}));
 
 const { validateCommandArgs } = require('../../shared/inputValidation.js');
 const { resolveSlackUser } = require('../../services/slackUserService.js');
@@ -72,14 +75,14 @@ describe('handleRegisterPlayerCommand', () => {
         
         validateCommandArgs.mockReturnValue({ 
             isValid: false, 
-            errorMessage: 'Please provide all required arguments. Usage: `@YourBotName register player [sleeper_username] [@slack_user or slack_username]`'
+            errorMessage: 'Please provide all required arguments. Usage: `@YourBotName register player [sleeper_username] [@slack_user or slack_name]`'
         });
 
         await handleRegisterPlayerCommand({ command, say, client });
 
         expect(sleeper.getUserByUsername).not.toHaveBeenCalled();
         expect(datastore.savePlayer).not.toHaveBeenCalled();
-        expect(say).toHaveBeenCalledWith('Please provide all required arguments. Usage: `@YourBotName register player [sleeper_username] [@slack_user or slack_username]`');
+        expect(say).toHaveBeenCalledWith('Please provide all required arguments. Usage: `@YourBotName register player [sleeper_username] [@slack_user or slack_name]`');
     });
 
     it('should return an error message if Sleeper user is not found', async () => {
@@ -93,5 +96,21 @@ describe('handleRegisterPlayerCommand', () => {
         expect(sleeper.getUserByUsername).toHaveBeenCalledWith('nonexistent_user');
         expect(datastore.savePlayer).not.toHaveBeenCalled();
         expect(say).toHaveBeenCalledWith('❌ Could not find Sleeper user with username `nonexistent_user`. Please check the username and try again.');
+    });
+
+    it('should tell the user when Slack user resolution fails', async () => {
+        const command = { text: 'john_doe JohnDoe' };
+        const mockSleeperUser = { user_id: 'sleeper123', username: 'john_doe' };
+        const resolutionError = new Error('mention them instead');
+        resolutionError.code = 'INVALID_SLACK_USER';
+
+        validateCommandArgs.mockReturnValue({ isValid: true });
+        sleeper.getUserByUsername.mockResolvedValue(mockSleeperUser);
+        resolveSlackUser.mockRejectedValue(resolutionError);
+
+        await handleRegisterPlayerCommand({ command, say, client });
+
+        expect(datastore.savePlayer).not.toHaveBeenCalled();
+        expect(say).toHaveBeenCalledWith('mention them instead');
     });
 });

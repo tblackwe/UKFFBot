@@ -18,8 +18,8 @@ function parseSlackUserInput(input) {
         };
     }
     
-    // Check if it's a direct member ID format (starts with 'U' and is 11 characters)
-    if (input.startsWith('U') && input.length === 11) {
+    // Slack member IDs start with U followed by 8+ alphanumeric chars (length varies by workspace)
+    if (/^U[A-Z0-9]{8,}$/i.test(input)) {
         return {
             memberId: input,
             isValidMemberId: true,
@@ -27,9 +27,9 @@ function parseSlackUserInput(input) {
         };
     }
     
-    // If it's not a member ID format, treat it as a username
+    // Bare username, optionally prefixed with @ when Slack does not expand a mention
     return {
-        memberId: input,
+        memberId: input.replace(/^@/, ''),
         isValidMemberId: false,
         originalInput: input
     };
