@@ -767,10 +767,18 @@ async function getNflPlayers(sport = 'nfl') {
 
 /**
  * Claim the once-per-day roster-check lock for an Eastern calendar date.
+ * Succeeds when no lock exists, the stored ttl has elapsed, or an in-progress
+ * claim is older than 10 minutes (Lambda crash/timeout). Completed locks are
+ * not reclaimed until ttl expires.
  * @param {string} etDate YYYY-MM-DD
  * @returns {Promise<boolean>} true if this caller won the lock
  */
+const ROSTER_CHECK_TTL_SECONDS = 2 * 24 * 60 * 60;
+const STALE_CLAIM_MS = 10 * 60 * 1000;
+
 async function tryClaimRosterCheck(etDate) {
+    const nowEpoch = Math.floor(Date.now() / 1000);
+    const staleBefore = new Date(Date.now() - STALE_CLAIM_MS).toISOString();
     try {
         await docClient.send(new PutCommand({
             TableName: TABLE_NAME,
@@ -778,9 +786,19 @@ async function tryClaimRosterCheck(etDate) {
                 PK: 'SCHEDULER',
                 SK: `ROSTER_CHECK#${etDate}`,
                 claimedAt: new Date().toISOString(),
-                ttl: Math.floor(Date.now() / 1000) + (7 * 24 * 60 * 60)
+                status: 'in_progress',
+                ttl: nowEpoch + ROSTER_CHECK_TTL_SECONDS
             },
-            ConditionExpression: 'attribute_not_exists(PK)'
+            ConditionExpression: 'attribute_not_exists(PK) OR #ttl < :now OR (claimedAt < :stale AND (attribute_not_exists(#status) OR #status = :inProgress))',
+            ExpressionAttributeNames: {
+                '#ttl': 'ttl',
+                '#status': 'status'
+            },
+            ExpressionAttributeValues: {
+                ':now': nowEpoch,
+                ':stale': staleBefore,
+                ':inProgress': 'in_progress'
+            }
         }));
         return true;
     } catch (error) {
@@ -788,6 +806,29 @@ async function tryClaimRosterCheck(etDate) {
             return false;
         }
         console.error(`Error claiming roster-check lock for ${etDate}:`, error);
+        throw error;
+    }
+}
+
+/**
+ * Mark a claimed roster-check lock as completed so later polls will not retry.
+ * @param {string} etDate YYYY-MM-DD
+ * @returns {Promise<void>}
+ */
+async function markRosterCheckComplete(etDate) {
+    try {
+        await docClient.send(new PutCommand({
+            TableName: TABLE_NAME,
+            Item: {
+                PK: 'SCHEDULER',
+                SK: `ROSTER_CHECK#${etDate}`,
+                claimedAt: new Date().toISOString(),
+                status: 'completed',
+                ttl: Math.floor(Date.now() / 1000) + ROSTER_CHECK_TTL_SECONDS
+            }
+        }));
+    } catch (error) {
+        console.error(`Error marking roster-check complete for ${etDate}:`, error);
         throw error;
     }
 }
@@ -833,5 +874,6 @@ module.exports = {
     saveNflPlayers,
     getNflPlayers,
     tryClaimRosterCheck,
+    markRosterCheckComplete,
     releaseRosterCheck
 };

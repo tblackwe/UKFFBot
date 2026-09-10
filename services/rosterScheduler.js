@@ -14,6 +14,14 @@ const logger = require('../shared/logger.js');
 const NFL_TZ = 'America/New_York';
 const LEAD_MS = 3 * 60 * 60 * 1000;
 const MAX_WEEK = 22;
+const ESPN_SEASON_TYPE = {
+    regular: 2,
+    post: 3
+};
+
+function espnSeasonTypeFor(seasonType) {
+    return seasonType === 'post' ? ESPN_SEASON_TYPE.post : ESPN_SEASON_TYPE.regular;
+}
 
 /**
  * Format a timestamp as YYYY-MM-DD in the NFL (Eastern) calendar.
@@ -76,12 +84,13 @@ function adjacentWeeks(week) {
  * are ignored so a 404 on week 0/19 does not skip the gate.
  * @param {number} season
  * @param {number} week
+ * @param {number} [espnSeasonType=2] ESPN seasontype (2 regular, 3 postseason)
  * @returns {Promise<object[]>}
  */
-async function loadUpcomingGames(season, week) {
+async function loadUpcomingGames(season, week, espnSeasonType = ESPN_SEASON_TYPE.regular) {
     const weeks = adjacentWeeks(week);
     const results = await Promise.allSettled(weeks.map(async (w) => {
-        const games = await fetchEspnSchedule(season, w);
+        const games = await fetchEspnSchedule(season, w, espnSeasonType);
         if (Array.isArray(games) && games.length > 0) {
             try {
                 await saveNflSchedule(season, w, games);
@@ -129,7 +138,7 @@ async function evaluateRosterCheck(now = new Date()) {
 
     let games;
     try {
-        games = await loadUpcomingGames(season, week);
+        games = await loadUpcomingGames(season, week, espnSeasonTypeFor(seasonType));
     } catch (error) {
         logger.error('Failed to load NFL schedule for roster-check gate', { error, season, week });
         return skip('schedule_error', { etDate, season, week });
@@ -170,5 +179,7 @@ module.exports = {
     shouldRunRosterCheck,
     adjacentWeeks,
     loadUpcomingGames,
-    evaluateRosterCheck
+    evaluateRosterCheck,
+    espnSeasonTypeFor,
+    ESPN_SEASON_TYPE
 };

@@ -129,6 +129,9 @@ describe('rosterScheduler gate', () => {
             const games = await loadUpcomingGames(2026, 5);
 
             expect(sleeper.getNflSchedule).toHaveBeenCalledTimes(3);
+            expect(sleeper.getNflSchedule).toHaveBeenCalledWith(2026, 4, 2);
+            expect(sleeper.getNflSchedule).toHaveBeenCalledWith(2026, 5, 2);
+            expect(sleeper.getNflSchedule).toHaveBeenCalledWith(2026, 6, 2);
             expect(games).toHaveLength(3);
             expect(datastore.saveNflSchedule).toHaveBeenCalledWith(2026, 4, week4);
             expect(datastore.saveNflSchedule).toHaveBeenCalledWith(2026, 5, week5);
@@ -209,6 +212,21 @@ describe('rosterScheduler gate', () => {
             datastore.tryClaimRosterCheck.mockResolvedValue(false);
             const decision = await evaluateRosterCheck(windowStart);
             expect(decision).toMatchObject({ shouldRun: false, reason: 'already_ran' });
+        });
+
+        it('fetches ESPN postseason scoreboards (seasontype 3)', async () => {
+            sleeper.getNflState.mockResolvedValue({
+                season: '2026',
+                week: 1,
+                display_week: 1,
+                season_type: 'post'
+            });
+            sleeper.getNflSchedule.mockResolvedValue([
+                { start_time: kickoff.toISOString(), home_team: 'KC', away_team: 'BUF' }
+            ]);
+            const decision = await evaluateRosterCheck(windowStart);
+            expect(decision.shouldRun).toBe(true);
+            expect(sleeper.getNflSchedule).toHaveBeenCalledWith(2026, 1, 3);
         });
     });
 });

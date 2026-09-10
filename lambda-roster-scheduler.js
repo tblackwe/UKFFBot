@@ -1,4 +1,4 @@
-const { getAllChannelsWithLeagues, releaseRosterCheck } = require('./services/datastore.js');
+const { getAllChannelsWithLeagues, releaseRosterCheck, markRosterCheckComplete } = require('./services/datastore.js');
 const { evaluateRosterCheck } = require('./services/rosterScheduler.js');
 const { analyzeLeagueRosters, formatAnalysisMessage } = require('./services/rosterAnalyzer.js');
 const logger = require('./shared/logger.js');
@@ -38,11 +38,13 @@ exports.handler = async (event) => {
         week: decision.week
     });
 
+    let postedAny = false;
     try {
         const channelsWithLeagues = await getAllChannelsWithLeagues();
 
         if (channelsWithLeagues.length === 0) {
             logger.info('No channels with registered leagues found');
+            await markRosterCheckComplete(decision.etDate);
             return {
                 statusCode: 200,
                 body: JSON.stringify({ message: 'No channels with leagues to check' })
@@ -53,12 +55,28 @@ exports.handler = async (event) => {
 
         for (const { channelId, leagues } of channelsWithLeagues) {
             try {
-                await processChannelRosters(channelId, leagues);
+                const posted = await processChannelRosters(channelId, leagues);
+                if (posted) {
+                    postedAny = true;
+                }
             } catch (error) {
-                logger.error('Error processing channel', { channelId, error });
+                logger.error('Error processing channel before any Slack post', { channelId, error });
             }
         }
 
+        if (!postedAny) {
+            logger.error('Roster check posted nothing; releasing lock for retry', { etDate: decision.etDate });
+            await releaseRosterCheck(decision.etDate);
+            return {
+                statusCode: 500,
+                body: JSON.stringify({
+                    error: 'Roster check posted nothing',
+                    etDate: decision.etDate
+                })
+            };
+        }
+
+        await markRosterCheckComplete(decision.etDate);
         return {
             statusCode: 200,
             body: JSON.stringify({
@@ -68,10 +86,12 @@ exports.handler = async (event) => {
         };
     } catch (error) {
         logger.error('Error in scheduled roster check', { error, etDate: decision.etDate });
-        try {
-            await releaseRosterCheck(decision.etDate);
-        } catch (releaseError) {
-            logger.error('Failed to release roster-check lock after error', { error: releaseError, etDate: decision.etDate });
+        if (!postedAny) {
+            try {
+                await releaseRosterCheck(decision.etDate);
+            } catch (releaseError) {
+                logger.error('Failed to release roster-check lock after error', { error: releaseError, etDate: decision.etDate });
+            }
         }
         return {
             statusCode: 500,
@@ -81,10 +101,13 @@ exports.handler = async (event) => {
 };
 
 /**
- * Process roster analysis for a specific channel
+ * Process roster analysis for a specific channel.
+ * @returns {Promise<boolean>} true if at least one Slack message was posted
+ * @throws {Error} when nothing was posted (so the handler can retry the day)
  */
 async function processChannelRosters(channelId, leagues) {
     logger.info('Processing rosters for channel', { channelId, leagueCount: leagues.length });
+    let posted = false;
 
     try {
         await slack.chat.postMessage({
@@ -100,6 +123,7 @@ async function processChannelRosters(channelId, leagues) {
                 }
             ]
         });
+        posted = true;
 
         for (const league of leagues) {
             try {
@@ -154,6 +178,8 @@ async function processChannelRosters(channelId, leagues) {
                 }
             ]
         });
+
+        return true;
     } catch (error) {
         logger.error('Error processing channel', { channelId, error });
 
@@ -162,8 +188,14 @@ async function processChannelRosters(channelId, leagues) {
                 channel: channelId,
                 text: `❌ Automated roster check failed: ${error.message}`
             });
+            posted = true;
         } catch (slackError) {
             logger.error('Failed to send error message to Slack', { error: slackError });
         }
+
+        if (!posted) {
+            throw error;
+        }
+        return true;
     }
 }

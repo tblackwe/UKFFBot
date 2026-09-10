@@ -15,9 +15,12 @@ So Thursday night, Friday internationals, Saturday, Sunday, and Monday night all
 work without hardcoded weekdays. If the NFL flexes a game to another day, the next
 poll reads ESPN and uses the new `start_time`.
 
-A poll is at most 30 minutes late (about 2.5 hours before kickoff). After a
-successful post, that Eastern date will not run again. If the Lambda throws before
-it finishes, the lock is released so a later poll can retry until kickoff.
+A poll is at most 30 minutes late (about 2.5 hours before kickoff). After at least
+one Slack message is posted, the lock is marked `completed` and that Eastern date
+will not run again. If nothing was posted (Slack down, thrown handler), the lock
+is released so a later poll can retry until kickoff. An `in_progress` claim older
+than 10 minutes can also be reclaimed (Lambda timeout/crash). Locks expire after
+about two days.
 
 ## Components
 
@@ -28,7 +31,7 @@ it finishes, the lock is released so a later poll can retry until kickoff.
 
 ### 2. Datastore
 - `getAllChannelsWithLeagues()` — channels that have registered leagues
-- `tryClaimRosterCheck(etDate)` / `releaseRosterCheck(etDate)` — once-per-day lock
+- `tryClaimRosterCheck(etDate)` / `markRosterCheckComplete(etDate)` / `releaseRosterCheck(etDate)` — once-per-day lock
 
 ### 3. CloudFormation: `template.yaml`
 - `RosterSchedulerFunction` with `rate(30 minutes)`

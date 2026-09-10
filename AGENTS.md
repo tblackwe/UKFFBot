@@ -29,7 +29,7 @@ Uses composite keys `PK` (partition) and `SK` (sort) for all entities:
 { data, ttl, lastUpdated }
 
 // Scheduler lock: PK='SCHEDULER', SK='ROSTER_CHECK#<YYYY-MM-DD>'
-{ claimedAt, ttl }
+{ claimedAt, status, ttl }
 ```
 
 **Critical**: Always use exact PK/SK prefixes. No GSI - use scans for channel-based queries.
