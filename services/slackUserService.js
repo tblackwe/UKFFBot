@@ -55,6 +55,9 @@ async function findSlackUsersByName(client, query) {
             }
             if (userMatchesName(user, query)) {
                 matches.push(user);
+                if (matches.length >= 2) {
+                    return matches;
+                }
             }
         }
         cursor = result.response_metadata?.next_cursor || undefined;

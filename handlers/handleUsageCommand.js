@@ -46,7 +46,7 @@ const handleUsageCommand = async ({ command, say, ack }) => {
                     },
                     {
                         "type": "mrkdwn",
-                        "text": "*`register player [sleeper_username] [@slack_user]`*\nMaps a Sleeper username to a Slack user for @-mentions. @mention the Slack user (plain names often fail). Or use the Register Player button on my App Home."
+                        "text": "*`register player [sleeper_username] [@slack_user or slack_name]`*\nMaps a Sleeper username to a Slack user for @-mentions. @mention is most reliable; a unique handle or display name also works. Or use the Register Player button on my App Home."
                     },
                     {
                         "type": "mrkdwn",

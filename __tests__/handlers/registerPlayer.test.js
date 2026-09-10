@@ -75,14 +75,14 @@ describe('handleRegisterPlayerCommand', () => {
         
         validateCommandArgs.mockReturnValue({ 
             isValid: false, 
-            errorMessage: 'Please provide all required arguments. Usage: `@YourBotName register player [sleeper_username] [@slack_user]`'
+            errorMessage: 'Please provide all required arguments. Usage: `@YourBotName register player [sleeper_username] [@slack_user or slack_name]`'
         });
 
         await handleRegisterPlayerCommand({ command, say, client });
 
         expect(sleeper.getUserByUsername).not.toHaveBeenCalled();
         expect(datastore.savePlayer).not.toHaveBeenCalled();
-        expect(say).toHaveBeenCalledWith('Please provide all required arguments. Usage: `@YourBotName register player [sleeper_username] [@slack_user]`');
+        expect(say).toHaveBeenCalledWith('Please provide all required arguments. Usage: `@YourBotName register player [sleeper_username] [@slack_user or slack_name]`');
     });
 
     it('should return an error message if Sleeper user is not found', async () => {

@@ -21,7 +21,7 @@ const handleRegisterPlayerCommand = async ({ command, say, client, ack }) => {
     const validation = validateCommandArgs(
         args, 
         2, 
-        '`@YourBotName register player [sleeper_username] [@slack_user]`'
+        '`@YourBotName register player [sleeper_username] [@slack_user or slack_name]`'
     );
     
     if (!validation.isValid) {

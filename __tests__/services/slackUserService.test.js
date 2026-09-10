@@ -83,6 +83,27 @@ describe('slackUserService', () => {
             });
         });
 
+        it('stops listing users once a name is ambiguous', async () => {
+            const client = makeListClient([
+                {
+                    members: [
+                        { id: 'U1', name: 'alice' },
+                        { id: 'U2', profile: { display_name: 'Alice' } }
+                    ],
+                    response_metadata: { next_cursor: 'page-2' }
+                },
+                {
+                    members: [{ id: 'U3', name: 'alice' }]
+                }
+            ]);
+
+            await expect(resolveSlackUser('alice', client)).rejects.toMatchObject({
+                code: 'INVALID_SLACK_USER',
+                message: expect.stringContaining('Several Slack users match')
+            });
+            expect(client.users.list).toHaveBeenCalledTimes(1);
+        });
+
         it('asks for an @mention when username lookup is unavailable', async () => {
             const client = {
                 users: {
