@@ -147,6 +147,11 @@ describe('rosterScheduler gate', () => {
             const games = await loadUpcomingGames(2026, 5);
             expect(games).toHaveLength(1);
         });
+
+        it('throws when every adjacent week fetch fails', async () => {
+            sleeper.getNflSchedule.mockRejectedValue(new Error('ESPN down'));
+            await expect(loadUpcomingGames(2026, 5)).rejects.toThrow('ESPN down');
+        });
     });
 
     describe('evaluateRosterCheck', () => {
@@ -189,6 +194,7 @@ describe('rosterScheduler gate', () => {
             mockRegularSeasonGames();
             const decision = await evaluateRosterCheck(new Date(windowStart.getTime() - 60_000));
             expect(decision).toMatchObject({ shouldRun: false, reason: 'too_early' });
+            expect(decision.firstKickoff).toBeInstanceOf(Date);
             expect(datastore.tryClaimRosterCheck).not.toHaveBeenCalled();
         });
 
@@ -196,6 +202,7 @@ describe('rosterScheduler gate', () => {
             mockRegularSeasonGames();
             const decision = await evaluateRosterCheck(kickoff);
             expect(decision).toMatchObject({ shouldRun: false, reason: 'too_late' });
+            expect(decision.firstKickoff).toBeInstanceOf(Date);
         });
 
         it('claims the lock and runs inside the window', async () => {
@@ -212,6 +219,20 @@ describe('rosterScheduler gate', () => {
             datastore.tryClaimRosterCheck.mockResolvedValue(false);
             const decision = await evaluateRosterCheck(windowStart);
             expect(decision).toMatchObject({ shouldRun: false, reason: 'already_ran' });
+            expect(decision.firstKickoff).toBeInstanceOf(Date);
+        });
+
+        it('skips with schedule_error when ESPN is completely down', async () => {
+            sleeper.getNflState.mockResolvedValue({
+                season: '2026',
+                week: 1,
+                display_week: 1,
+                season_type: 'regular'
+            });
+            sleeper.getNflSchedule.mockRejectedValue(new Error('ESPN down'));
+            const decision = await evaluateRosterCheck(windowStart);
+            expect(decision).toMatchObject({ shouldRun: false, reason: 'schedule_error' });
+            expect(datastore.tryClaimRosterCheck).not.toHaveBeenCalled();
         });
 
         it('fetches ESPN postseason scoreboards (seasontype 3)', async () => {

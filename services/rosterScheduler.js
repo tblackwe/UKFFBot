@@ -80,12 +80,14 @@ function adjacentWeeks(week) {
 
 /**
  * Live ESPN scoreboards for the current week and its neighbours, write-through
- * to DynamoDB so roster analysis can reuse the data. Failures on a single week
- * are ignored so a 404 on week 0/19 does not skip the gate.
+ * to DynamoDB so roster analysis can reuse the data. A single week failing
+ * (e.g. 404 on week 0/19) is ignored. Throws if every week fetch fails so
+ * callers can distinguish an outage from a true no-games day.
  * @param {number} season
  * @param {number} week
  * @param {number} [espnSeasonType=2] ESPN seasontype (2 regular, 3 postseason)
  * @returns {Promise<object[]>}
+ * @throws {Error} when every adjacent-week ESPN request fails
  */
 async function loadUpcomingGames(season, week, espnSeasonType = ESPN_SEASON_TYPE.regular) {
     const weeks = adjacentWeeks(week);
@@ -105,7 +107,13 @@ async function loadUpcomingGames(season, week, espnSeasonType = ESPN_SEASON_TYPE
         return Array.isArray(games) ? games : [];
     }));
 
-    return results.flatMap((result) => (result.status === 'fulfilled' ? result.value : []));
+    const fulfilled = results.filter((result) => result.status === 'fulfilled');
+    if (fulfilled.length === 0) {
+        const firstFailure = results.find((result) => result.status === 'rejected');
+        throw firstFailure?.reason || new Error(`Failed to load NFL schedule for ${season} weeks ${weeks.join(',')}`);
+    }
+
+    return fulfilled.flatMap((result) => result.value);
 }
 
 function skip(reason, extra = {}) {
@@ -150,15 +158,15 @@ async function evaluateRosterCheck(now = new Date()) {
     }
 
     if (now < new Date(firstKickoff.getTime() - LEAD_MS)) {
-        return skip('too_early', { etDate, firstKickoff: firstKickoff.toISOString(), season, week });
+        return skip('too_early', { etDate, firstKickoff, season, week });
     }
     if (now >= firstKickoff) {
-        return skip('too_late', { etDate, firstKickoff: firstKickoff.toISOString(), season, week });
+        return skip('too_late', { etDate, firstKickoff, season, week });
     }
 
     const claimed = await tryClaimRosterCheck(etDate);
     if (!claimed) {
-        return skip('already_ran', { etDate, firstKickoff: firstKickoff.toISOString() });
+        return skip('already_ran', { etDate, firstKickoff });
     }
 
     return {

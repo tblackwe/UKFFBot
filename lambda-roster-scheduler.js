@@ -20,7 +20,9 @@ exports.handler = async (event) => {
         logger.info('Roster check skipped', {
             reason: decision.reason,
             etDate: decision.etDate,
-            firstKickoff: decision.firstKickoff
+            firstKickoff: decision.firstKickoff instanceof Date
+                ? decision.firstKickoff.toISOString()
+                : decision.firstKickoff
         });
         return {
             statusCode: 200,
@@ -60,7 +62,11 @@ exports.handler = async (event) => {
                     postedAny = true;
                 }
             } catch (error) {
-                logger.error('Error processing channel before any Slack post', { channelId, error });
+                logger.error('Error processing channel', {
+                    channelId,
+                    postedAny,
+                    error
+                });
             }
         }
 
