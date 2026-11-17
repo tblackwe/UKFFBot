@@ -10,6 +10,7 @@ const {
     adjacentWeeks,
     loadUpcomingGames,
     evaluateRosterCheck,
+    groupKickoffWindows,
     LEAD_MS
 } = require('../../services/rosterScheduler.js');
 
@@ -100,6 +101,20 @@ describe('rosterScheduler gate', () => {
             expect(adjacentWeeks(1)).toEqual([1, 2]);
             expect(adjacentWeeks(5)).toEqual([4, 5, 6]);
             expect(adjacentWeeks(18)).toEqual([17, 18, 19]);
+        });
+    });
+
+    describe('groupKickoffWindows', () => {
+        it('coalesces 4:00pm and 4:25pm into one secondary window', () => {
+            const windows = groupKickoffWindows([
+                { start_time: '2026-09-13T13:30:00.000Z' },
+                { start_time: '2026-09-13T17:00:00.000Z' },
+                { start_time: '2026-09-13T20:25:00.000Z' },
+                { start_time: '2026-09-14T00:20:00.000Z' }
+            ], '2026-09-13');
+
+            expect(windows.map((window) => window.key)).toEqual(['primary', '1pm', '4pm', 'snf']);
+            expect(windows.find((window) => window.key === '4pm')?.kickoff.toISOString()).toBe('2026-09-13T20:25:00.000Z');
         });
     });
 
@@ -211,7 +226,28 @@ describe('rosterScheduler gate', () => {
             expect(decision.shouldRun).toBe(true);
             expect(decision.reason).toBe('run');
             expect(decision.etDate).toBe('2026-09-10');
-            expect(datastore.tryClaimRosterCheck).toHaveBeenCalledWith('2026-09-10');
+            expect(datastore.tryClaimRosterCheck).toHaveBeenCalledWith('2026-09-10', 'primary');
+        });
+
+        it('detects a later secondary window before the 1pm kickoff', async () => {
+            sleeper.getNflState.mockResolvedValue({
+                season: '2026',
+                week: 1,
+                display_week: 1,
+                season_type: 'regular'
+            });
+            sleeper.getNflSchedule.mockResolvedValue([
+                { start_time: '2026-09-13T13:30:00.000Z' },
+                { start_time: '2026-09-13T17:00:00.000Z' },
+                { start_time: '2026-09-13T20:25:00.000Z' },
+                { start_time: '2026-09-13T00:20:00.000Z' }
+            ]);
+
+            const decision = await evaluateRosterCheck(new Date('2026-09-13T14:00:00.000Z'));
+            expect(decision.shouldRun).toBe(true);
+            expect(decision.checkType).toBe('secondary');
+            expect(decision.windowKey).toBe('1pm');
+            expect(datastore.tryClaimRosterCheck).toHaveBeenCalledWith('2026-09-13', '1pm');
         });
 
         it('skips when another poll already claimed the day', async () => {

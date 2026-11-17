@@ -13,6 +13,7 @@ const logger = require('../shared/logger.js');
 
 const NFL_TZ = 'America/New_York';
 const LEAD_MS = 3 * 60 * 60 * 1000;
+const WINDOW_GROUP_MS = 90 * 60 * 1000;
 const MAX_WEEK = 22;
 const ESPN_SEASON_TYPE = {
     regular: 2,
@@ -55,6 +56,80 @@ function firstKickoffOnDate(games, etDate) {
         .sort((a, b) => a.getTime() - b.getTime());
 
     return kickoffs[0] || null;
+}
+
+function deadlineKeyForKickoff(kickoff, isPrimary = false) {
+    if (isPrimary) {
+        return 'primary';
+    }
+
+    const etTime = new Intl.DateTimeFormat('en-US', {
+        timeZone: NFL_TZ,
+        hour: 'numeric',
+        minute: '2-digit',
+        hour12: false
+    }).format(kickoff);
+
+    const [hourText, minuteText] = etTime.split(':');
+    const hour = Number(hourText);
+    const minute = Number(minuteText);
+
+    if (hour === 13 && minute <= 30) {
+        return '1pm';
+    }
+    if (hour === 16 && minute <= 30) {
+        return '4pm';
+    }
+    if (hour >= 20) {
+        return 'snf';
+    }
+    return `window-${hour}-${minute}`;
+}
+
+function groupKickoffWindows(games, etDate) {
+    if (!Array.isArray(games) || !etDate) {
+        return [];
+    }
+
+    const kickoffs = games
+        .filter((game) => game?.start_time && etDateString(game.start_time) === etDate)
+        .map((game) => new Date(game.start_time))
+        .filter((kickoff) => !Number.isNaN(kickoff.getTime()))
+        .sort((a, b) => a.getTime() - b.getTime());
+
+    const windows = [];
+    for (const kickoff of kickoffs) {
+        if (windows.length === 0) {
+            const window = { kickoff, key: 'primary', windowKey: 'primary', isPrimary: true, windowStart: new Date(kickoff.getTime() - LEAD_MS) };
+            windows.push(window);
+            continue;
+        }
+
+        const lastWindow = windows[windows.length - 1];
+        if (kickoff.getTime() === lastWindow.kickoff.getTime()) {
+            continue;
+        }
+
+        if ((kickoff.getTime() - lastWindow.kickoff.getTime()) <= WINDOW_GROUP_MS) {
+            lastWindow.kickoff = kickoff;
+            lastWindow.key = deadlineKeyForKickoff(kickoff);
+            lastWindow.windowKey = lastWindow.key;
+            lastWindow.isPrimary = false;
+            lastWindow.windowStart = new Date(kickoff.getTime() - LEAD_MS);
+            continue;
+        }
+
+        const nextWindow = {
+            kickoff,
+            key: deadlineKeyForKickoff(kickoff),
+            windowKey: deadlineKeyForKickoff(kickoff),
+            isPrimary: false,
+            windowStart: new Date(kickoff.getTime() - LEAD_MS)
+        };
+        windows.push(nextWindow);
+    }
+
+    return windows;
 }
 
 /**
@@ -157,23 +232,38 @@ async function evaluateRosterCheck(now = new Date()) {
         return skip('no_games', { etDate, season, week });
     }
 
-    if (now < new Date(firstKickoff.getTime() - LEAD_MS)) {
-        return skip('too_early', { etDate, firstKickoff, season, week });
-    }
-    if (now >= firstKickoff) {
-        return skip('too_late', { etDate, firstKickoff, season, week });
+    const windows = groupKickoffWindows(games, etDate);
+    if (windows.length === 0) {
+        return skip('no_games', { etDate, season, week });
     }
 
-    const claimed = await tryClaimRosterCheck(etDate);
+    const activeWindow = windows.find((window) => now >= window.windowStart && now < window.kickoff);
+    if (!activeWindow) {
+        const earliestWindow = windows[0];
+        if (now < earliestWindow.windowStart) {
+            return skip('too_early', { etDate, firstKickoff: earliestWindow.kickoff, season, week });
+        }
+        return skip('too_late', { etDate, firstKickoff: earliestWindow.kickoff, season, week });
+    }
+
+    const claimed = await tryClaimRosterCheck(etDate, activeWindow.windowKey);
     if (!claimed) {
-        return skip('already_ran', { etDate, firstKickoff });
+        return skip('already_ran', {
+            etDate,
+            firstKickoff: windows[0].kickoff,
+            windowKey: activeWindow.windowKey,
+            checkType: activeWindow.isPrimary ? 'primary' : 'secondary'
+        });
     }
 
     return {
         shouldRun: true,
         reason: 'run',
         etDate,
-        firstKickoff,
+        firstKickoff: windows[0].kickoff,
+        kickoff: activeWindow.kickoff,
+        windowKey: activeWindow.windowKey,
+        checkType: activeWindow.isPrimary ? 'primary' : 'secondary',
         season,
         week
     };
@@ -184,6 +274,7 @@ module.exports = {
     LEAD_MS,
     etDateString,
     firstKickoffOnDate,
+    groupKickoffWindows,
     shouldRunRosterCheck,
     adjacentWeeks,
     loadUpcomingGames,

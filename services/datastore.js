@@ -776,15 +776,22 @@ async function getNflPlayers(sport = 'nfl') {
 const ROSTER_CHECK_TTL_SECONDS = 2 * 24 * 60 * 60;
 const STALE_CLAIM_MS = 10 * 60 * 1000;
 
-async function tryClaimRosterCheck(etDate) {
+function rosterCheckSk(etDate, windowKey = 'primary') {
+    return windowKey === 'primary'
+        ? `ROSTER_CHECK#${etDate}`
+        : `ROSTER_CHECK#${etDate}#${windowKey}`;
+}
+
+async function tryClaimRosterCheck(etDate, windowKey = 'primary') {
     const nowEpoch = Math.floor(Date.now() / 1000);
     const staleBefore = new Date(Date.now() - STALE_CLAIM_MS).toISOString();
+    const sk = rosterCheckSk(etDate, windowKey);
     try {
         await docClient.send(new PutCommand({
             TableName: TABLE_NAME,
             Item: {
                 PK: 'SCHEDULER',
-                SK: `ROSTER_CHECK#${etDate}`,
+                SK: sk,
                 claimedAt: new Date().toISOString(),
                 status: 'in_progress',
                 ttl: nowEpoch + ROSTER_CHECK_TTL_SECONDS
@@ -805,7 +812,7 @@ async function tryClaimRosterCheck(etDate) {
         if (error.name === 'ConditionalCheckFailedException') {
             return false;
         }
-        console.error(`Error claiming roster-check lock for ${etDate}:`, error);
+        console.error(`Error claiming roster-check lock for ${etDate} (${windowKey}):`, error);
         throw error;
     }
 }
@@ -813,22 +820,23 @@ async function tryClaimRosterCheck(etDate) {
 /**
  * Mark a claimed roster-check lock as completed so later polls will not retry.
  * @param {string} etDate YYYY-MM-DD
+ * @param {string} [windowKey='primary']
  * @returns {Promise<void>}
  */
-async function markRosterCheckComplete(etDate) {
+async function markRosterCheckComplete(etDate, windowKey = 'primary') {
     try {
         await docClient.send(new PutCommand({
             TableName: TABLE_NAME,
             Item: {
                 PK: 'SCHEDULER',
-                SK: `ROSTER_CHECK#${etDate}`,
+                SK: rosterCheckSk(etDate, windowKey),
                 claimedAt: new Date().toISOString(),
                 status: 'completed',
                 ttl: Math.floor(Date.now() / 1000) + ROSTER_CHECK_TTL_SECONDS
             }
         }));
     } catch (error) {
-        console.error(`Error marking roster-check complete for ${etDate}:`, error);
+        console.error(`Error marking roster-check complete for ${etDate} (${windowKey}):`, error);
         throw error;
     }
 }
@@ -836,19 +844,20 @@ async function markRosterCheckComplete(etDate) {
 /**
  * Drop the roster-check lock so a later poll can retry after a failed run.
  * @param {string} etDate YYYY-MM-DD
+ * @param {string} [windowKey='primary']
  * @returns {Promise<void>}
  */
-async function releaseRosterCheck(etDate) {
+async function releaseRosterCheck(etDate, windowKey = 'primary') {
     try {
         await docClient.send(new DeleteCommand({
             TableName: TABLE_NAME,
             Key: {
                 PK: 'SCHEDULER',
-                SK: `ROSTER_CHECK#${etDate}`
+                SK: rosterCheckSk(etDate, windowKey)
             }
         }));
     } catch (error) {
-        console.error(`Error releasing roster-check lock for ${etDate}:`, error);
+        console.error(`Error releasing roster-check lock for ${etDate} (${windowKey}):`, error);
         throw error;
     }
 }

@@ -46,10 +46,10 @@ exports.handler = async (event) => {
 
         if (channelsWithLeagues.length === 0) {
             logger.info('No channels with registered leagues found');
-            await markRosterCheckComplete(decision.etDate);
+            await markRosterCheckComplete(decision.etDate, decision.windowKey);
             return {
                 statusCode: 200,
-                body: JSON.stringify({ message: 'No channels with leagues to check' })
+                body: JSON.stringify({ message: 'No channels with leagues to check', etDate: decision.etDate, windowKey: decision.windowKey })
             };
         }
 
@@ -57,7 +57,11 @@ exports.handler = async (event) => {
 
         for (const { channelId, leagues } of channelsWithLeagues) {
             try {
-                const posted = await processChannelRosters(channelId, leagues);
+                const posted = await processChannelRosters(channelId, leagues, {
+                    isSecondary: decision.checkType === 'secondary',
+                    etDate: decision.etDate,
+                    windowKey: decision.windowKey
+                });
                 if (posted) {
                     postedAny = true;
                 }
@@ -71,37 +75,55 @@ exports.handler = async (event) => {
         }
 
         if (!postedAny) {
+            if (decision.checkType === 'secondary') {
+                logger.info('Secondary roster check found no broken rosters; skipping Slack post', {
+                    etDate: decision.etDate,
+                    windowKey: decision.windowKey
+                });
+                await markRosterCheckComplete(decision.etDate, decision.windowKey);
+                return {
+                    statusCode: 200,
+                    body: JSON.stringify({
+                        message: `Secondary roster check completed without broken rosters`,
+                        etDate: decision.etDate,
+                        windowKey: decision.windowKey
+                    })
+                };
+            }
+
             logger.error('Roster check posted nothing; releasing lock for retry', { etDate: decision.etDate });
-            await releaseRosterCheck(decision.etDate);
+            await releaseRosterCheck(decision.etDate, decision.windowKey);
             return {
                 statusCode: 500,
                 body: JSON.stringify({
                     error: 'Roster check posted nothing',
-                    etDate: decision.etDate
+                    etDate: decision.etDate,
+                    windowKey: decision.windowKey
                 })
             };
         }
 
-        await markRosterCheckComplete(decision.etDate);
+        await markRosterCheckComplete(decision.etDate, decision.windowKey);
         return {
             statusCode: 200,
             body: JSON.stringify({
                 message: `Roster check completed for ${channelsWithLeagues.length} channels`,
-                etDate: decision.etDate
+                etDate: decision.etDate,
+                windowKey: decision.windowKey
             })
         };
     } catch (error) {
-        logger.error('Error in scheduled roster check', { error, etDate: decision.etDate });
+        logger.error('Error in scheduled roster check', { error, etDate: decision.etDate, windowKey: decision.windowKey });
         if (!postedAny) {
             try {
-                await releaseRosterCheck(decision.etDate);
+                await releaseRosterCheck(decision.etDate, decision.windowKey);
             } catch (releaseError) {
-                logger.error('Failed to release roster-check lock after error', { error: releaseError, etDate: decision.etDate });
+                logger.error('Failed to release roster-check lock after error', { error: releaseError, etDate: decision.etDate, windowKey: decision.windowKey });
             }
         }
         return {
             statusCode: 500,
-            body: JSON.stringify({ error: error.message })
+            body: JSON.stringify({ error: error.message, etDate: decision.etDate, windowKey: decision.windowKey })
         };
     }
 };
@@ -109,99 +131,105 @@ exports.handler = async (event) => {
 /**
  * Process roster analysis for a specific channel.
  * @returns {Promise<boolean>} true if at least one Slack message was posted
- * @throws {Error} when nothing was posted (so the handler can retry the day)
  */
-async function processChannelRosters(channelId, leagues) {
-    logger.info('Processing rosters for channel', { channelId, leagueCount: leagues.length });
+async function processChannelRosters(channelId, leagues, options = {}) {
+    const { isSecondary = false, etDate, windowKey } = options;
+    logger.info('Processing rosters for channel', { channelId, leagueCount: leagues.length, isSecondary, etDate, windowKey });
     let posted = false;
 
     try {
-        await slack.chat.postMessage({
-            channel: channelId,
-            text: '🔍 Automated Roster Check - Analyzing rosters for issues...',
-            blocks: [
-                {
-                    type: "section",
-                    text: {
-                        type: "mrkdwn",
-                        text: "🔍 *Automated Roster Check*\nAnalyzing rosters for issues... This may take a moment."
-                    }
-                }
-            ]
-        });
-        posted = true;
-
+        const analyses = [];
         for (const league of leagues) {
             try {
-                logger.info('Analyzing league', { leagueId: league.leagueId, leagueName: league.leagueName });
+                logger.info('Analyzing league', { leagueId: league.leagueId, leagueName: league.leagueName, isSecondary });
 
                 const analysis = await analyzeLeagueRosters(league.leagueId);
-                const messageData = formatAnalysisMessage(analysis);
-
-                const leagueHeaderText = `**${league.leagueName}** (${league.season})`;
-
-                const headerBlock = {
-                    type: "section",
-                    text: {
-                        type: "mrkdwn",
-                        text: `*${league.leagueName}* (${league.season})`
-                    }
-                };
-
-                await slack.chat.postMessage({
-                    channel: channelId,
-                    text: leagueHeaderText + '\n' + messageData.text,
-                    blocks: [headerBlock, { type: "divider" }, ...messageData.blocks]
-                });
+                analyses.push({ league, analysis });
             } catch (error) {
-                logger.error('Error analyzing league', { leagueId: league.leagueId, error });
-                await slack.chat.postMessage({
-                    channel: channelId,
-                    text: `❌ Failed to analyze league "${league.leagueName}": ${error.message}`,
-                    blocks: [
-                        {
-                            type: "section",
-                            text: {
-                                type: "mrkdwn",
-                                text: `❌ *Failed to analyze league "${league.leagueName}"*\n${error.message}`
+                logger.error('Error analyzing league', { leagueId: league.leagueId, error, isSecondary });
+                if (!isSecondary) {
+                    await slack.chat.postMessage({
+                        channel: channelId,
+                        text: `❌ Failed to analyze league "${league.leagueName}": ${error.message}`,
+                        blocks: [
+                            {
+                                type: "section",
+                                text: {
+                                    type: "mrkdwn",
+                                    text: `❌ *Failed to analyze league "${league.leagueName}"*\n${error.message}`
+                                }
                             }
-                        }
-                    ]
-                });
+                        ]
+                    });
+                    posted = true;
+                }
             }
         }
 
-        await slack.chat.postMessage({
-            channel: channelId,
-            text: '✅ Automated roster analysis complete!',
-            blocks: [
-                {
-                    type: "section",
-                    text: {
-                        type: "mrkdwn",
-                        text: "✅ *Automated roster analysis complete!*"
-                    }
-                }
-            ]
-        });
+        if (isSecondary && !analyses.some(({ analysis }) => analysis.rostersWithIssues > 0)) {
+            logger.info('Secondary roster check found no broken rosters; skipping Slack post', { channelId, etDate, windowKey });
+            return false;
+        }
 
-        return true;
-    } catch (error) {
-        logger.error('Error processing channel', { channelId, error });
-
-        try {
+        if (!isSecondary) {
             await slack.chat.postMessage({
                 channel: channelId,
-                text: `❌ Automated roster check failed: ${error.message}`
+                text: '🔍 Automated Roster Check - Analyzing rosters for issues...',
+                blocks: [
+                    {
+                        type: "section",
+                        text: {
+                            type: "mrkdwn",
+                            text: "🔍 *Automated Roster Check*\nAnalyzing rosters for issues... This may take a moment."
+                        }
+                    }
+                ]
             });
             posted = true;
-        } catch (slackError) {
-            logger.error('Failed to send error message to Slack', { error: slackError });
         }
 
-        if (!posted) {
-            throw error;
+        for (const { league, analysis } of analyses) {
+            if (isSecondary && analysis.rostersWithIssues === 0) {
+                continue;
+            }
+
+            const messageData = formatAnalysisMessage(analysis);
+            const leagueHeaderText = `**${league.leagueName}** (${league.season})`;
+            const headerBlock = {
+                type: "section",
+                text: {
+                    type: "mrkdwn",
+                    text: `*${league.leagueName}* (${league.season})`
+                }
+            };
+
+            await slack.chat.postMessage({
+                channel: channelId,
+                text: leagueHeaderText + '\n' + messageData.text,
+                blocks: [headerBlock, { type: "divider" }, ...messageData.blocks]
+            });
+            posted = true;
         }
-        return true;
+
+        if (!isSecondary) {
+            await slack.chat.postMessage({
+                channel: channelId,
+                text: '✅ Automated roster analysis complete!',
+                blocks: [
+                    {
+                        type: "section",
+                        text: {
+                            type: "mrkdwn",
+                            text: "✅ *Automated roster analysis complete!*"
+                        }
+                    }
+                ]
+            });
+        }
+
+        return posted;
+    } catch (error) {
+        logger.error('Error processing channel', { channelId, error, isSecondary, etDate, windowKey });
+        throw error;
     }
 }
