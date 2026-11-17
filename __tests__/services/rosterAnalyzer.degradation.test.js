@@ -2,9 +2,11 @@
 // data fails to load, and still fails fast when rosters themselves are missing.
 jest.mock('../../services/sleeper.js');
 jest.mock('../../services/nflDataCache.js');
+jest.mock('../../services/datastore.js');
 
 const sleeper = require('../../services/sleeper.js');
 const cache = require('../../services/nflDataCache.js');
+const datastore = require('../../services/datastore.js');
 const { analyzeLeagueRosters } = require('../../services/rosterAnalyzer.js');
 
 describe('analyzeLeagueRosters graceful degradation', () => {
@@ -57,6 +59,16 @@ describe('analyzeLeagueRosters graceful degradation', () => {
 
         expect(result).toBeDefined();
         expect(result.totalRosters).toBe(1);
+    });
+
+    it('uses a Slack mention for roster owners when the Sleeper user is mapped', async () => {
+        datastore.getAllPlayers.mockResolvedValue([
+            { sleeperId: 'U1', slackMemberId: 'U123ABC', slackName: 'owner-one' }
+        ]);
+
+        const result = await analyzeLeagueRosters('L1');
+
+        expect(result.rosterAnalysis[0].owner).toBe('<@U123ABC>');
     });
 
     it('fails fast when rosters cannot be loaded', async () => {

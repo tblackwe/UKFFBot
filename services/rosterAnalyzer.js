@@ -1,5 +1,6 @@
 const { getLeagueRosters, getLeagueUsers, getNflState, getLeague } = require('./sleeper.js');
 const { getNflByeWeeksWithCache, getPlayersFromCacheOrFetch, getNflScheduleWithCache, hasTeamPlayedThisWeek } = require('./nflDataCache.js');
+const { getAllPlayers } = require('./datastore.js');
 
 /**
  * Position mappings for fantasy relevance
@@ -74,6 +75,18 @@ async function analyzeLeagueRosters(leagueId) {
             userMap[user.user_id] = user;
         });
 
+        let slackUserMap = new Map();
+        try {
+            const allPlayers = await getAllPlayers();
+            for (const player of allPlayers) {
+                if (player && player.sleeperId) {
+                    slackUserMap.set(String(player.sleeperId), player);
+                }
+            }
+        } catch (error) {
+            console.warn('[ROSTER_ANALYZER] Unable to load Slack player mappings; roster owner mentions will fall back to names:', error.message);
+        }
+
         // Check if this is a guillotine league by looking for empty rosters
         const isGuillotineLeague = detectGuillotineLeague(league, rosters);
         if (isGuillotineLeague) {
@@ -119,12 +132,16 @@ async function analyzeLeagueRosters(leagueId) {
             }
 
             const owner = userMap[roster.owner_id];
+            const mappedOwner = slackUserMap.get(String(roster.owner_id));
+            const ownerDisplayName = owner ? owner.display_name || owner.username : 'Unknown Owner';
+            const ownerLabel = mappedOwner && mappedOwner.slackMemberId ? `<@${mappedOwner.slackMemberId}>` : ownerDisplayName;
             const rosterIssues = analyzeRoster(roster, allPlayers, currentWeek, byeWeeks, weekSchedule, league.roster_positions);
             
             if (rosterIssues.hasIssues) {
                 rosterAnalysis.push({
-                    owner: owner ? owner.display_name || owner.username : 'Unknown Owner',
+                    owner: ownerLabel,
                     ownerId: roster.owner_id,
+                    ownerSlackId: mappedOwner?.slackMemberId || null,
                     rosterId: roster.roster_id,
                     issues: rosterIssues
                 });
